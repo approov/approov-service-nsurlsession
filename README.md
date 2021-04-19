@@ -25,14 +25,13 @@ $ approov sdk -getConfig approov-initial.config
 The `approov-initial.config` file must then be included in you application bundle and automatically loaded by the Approov SDK. It is possible to change the filename and also include the configuration string as a variable by overriding/modifying the `ApproovSDK` class variables in the `ApproovURLSession.m` file.
 
 ## Approov Token Header
-The default header name of `Approov-Token` can be changed as follows:
+The default header name of `Approov-Token` can be changed by modifying the variable `kApproovTokenHeader` in `ApproovURLSession.m` file:
 
-```Java
-YourApp.approovService.setApproovHeader("Authorization", "Bearer ")
+```ObjectiveC
+static NSString* kApproovTokenHeader = @"Approov-Token";
 ```
 
-The first parameter is the new header name and the second a prefix to be added to the Approov token. This is primarily for integrations where the Approov Token JWT might need to be prefixed with `Bearer` and passed in the `Authorization` header.
-
+You may like to change the above value to `Authorization` and prefix the actual Approov JWT Token with `Bearer ` and make use of the resulting header in your integration.
 ## Token Binding
 If you are using [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then set the header holding the value to be used for binding as follows:
 
