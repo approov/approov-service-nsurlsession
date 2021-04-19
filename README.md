@@ -3,13 +3,14 @@
 A wrapper for the [Approov SDK](https://github.com/approov/approov-ios-sdk) to enable easy integration when using [`NSURLSession`](https://developer.apple.com/documentation/foundation/nsurlsession) for making the API calls that you wish to protect with Approov. In order to use this you will need a trial or paid [Approov](https://www.approov.io) account.
 
 ## Adding ApproovService Dependency
-The Approov integration is available via [`cocoapods`](https://cocoapods.org/). This allows inclusion into the project by simply specifying a dependency in the `Podfile` for the app:
+The Approov integration is available via [`cocoapods`](https://cocoapods.org/). This allows inclusion into the proj ect by simply specifying a dependency in the `Podfile` for the app:
 
 ```
 target 'YourApplication' do
     use_frameworks!
     platform :ios, '10.0'
     pod 'approov-service-nsurlsession', '2.6.1', :source => "https://github.com/approov/approov-service-nsurlsession.git"
+    pod 'approov-ios-sdk', '2.6.1', :source => "https://github.com/approov/approov-ios-sdk.git"
 end
 ```
 
