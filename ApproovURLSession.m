@@ -818,6 +818,7 @@ static NSString* bindHeader = @"";
             // Set Approov-Token header. We need to modify the original request.
             NSMutableURLRequest *newRequest = [returnData.request mutableCopy];
             [newRequest setValue:[NSString stringWithFormat:@"%@%@",approovTokenPrefix,approovResult.token] forHTTPHeaderField: kApproovTokenHeader];
+            returnData.request = newRequest;
             break;
         }
         case ApproovTokenFetchStatusNoNetwork:
