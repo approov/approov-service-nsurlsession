@@ -803,7 +803,7 @@ static NSString* bindHeader = @"";
     // Invoke fetch token sync
     ApproovTokenFetchResult* approovResult = [Approov fetchApproovTokenAndWait:request.URL.absoluteString];
     // Log result of token fetch
-    NSLog(@"ApproovURLSession: Approov token for host: %@ : %@", request.URL.absoluteString, approovResult.loggableToken);
+    NSLog(@"ApproovURLSession: Approov token for host: %@ : %@", request.URL.host, approovResult.loggableToken);
     if (approovResult.isConfigChanged) {
         // Store dynamic config file if a change has occurred
         [self storeApproovDynamicConfig:Approov.fetchConfig];
