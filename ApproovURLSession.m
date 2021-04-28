@@ -793,11 +793,6 @@ static NSString* bindHeader = @"";
         if([request valueForHTTPHeaderField:[ApproovSDK getBindHeader]] != nil){
             // Add the Bind Header as a data hash to Approov token
             [Approov setDataHashInToken:[request valueForHTTPHeaderField:[ApproovSDK getBindHeader]]];
-        } else {
-            // We fail since required binding header is missing
-            NSError *error = [ApproovSDK createErrorWithCode:1002 errorMessage:@"FATAL: Approov SDK missing token binding header"];
-            [returnData setError:error];
-            return returnData;
         }
     }
     // Invoke fetch token sync
