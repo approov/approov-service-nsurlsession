@@ -33,6 +33,7 @@ static NSString* kApproovTokenHeader = @"Approov-Token";
 ```
 
 You may like to change the above value to `Authorization` and prefix the actual Approov JWT Token with `Bearer ` and make use of the resulting header in your integration.
+
 ## Token Binding
 If you are using [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then set the header holding the value to be used for binding as follows:
 
