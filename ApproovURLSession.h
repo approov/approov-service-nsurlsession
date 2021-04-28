@@ -144,7 +144,11 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 + (instancetype)sharedInstance;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
-- (void)prefetchApproovToken;
++ (void)prefetchApproovToken;
+- (NSString*)getApproovTokenHeader;
+- (void)setApproovTokenHeader:(NSString*)newHeader;
+- (NSString*)getApproovTokenPrefix;
+- (void)setApproovTokenPrefix:(NSString*)newHeader;
 @end
 #endif /* ApproovURLSession_h */
 

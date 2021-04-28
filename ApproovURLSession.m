@@ -663,7 +663,7 @@ static NSString* kApproovInitialKey = @"approov-initial";
 /* Initial configuration file extention for Approov SDK */
 static NSString* kConfigFileExtension = @"config";
 /* Approov token default header */
-static NSString* kApproovTokenHeader = @"Approov-Token";
+static NSString* approovTokenHeader = @"Approov-Token";
 /* Approov token custom prefix: any prefix to be added such as "Bearer " */
 static NSString* approovTokenPrefix = @"";
 /* Bind header string */
@@ -742,7 +742,7 @@ static NSString* bindHeader = @"";
  *  expensive the prefetch seems reasonable.
  */
 
-- (void)prefetchApproovToken {
++ (void)prefetchApproovToken {
     if ([ApproovSDK sharedInstance]){
         // We succeeded initializing Approov SDK, fetch a token
         [Approov fetchApproovToken:^(ApproovTokenFetchResult* result) {
@@ -754,7 +754,7 @@ static NSString* bindHeader = @"";
 /* Get bindHeader content
  *
  */
-+ (NSString*)getBindHeader {
+- (NSString*)getBindHeader {
     @synchronized (bindHeader) {
         return bindHeader;
     }
@@ -763,11 +763,48 @@ static NSString* bindHeader = @"";
 /* Set bindHeader content
  *
  */
-+ (void)setBindHeader:(NSString*)newHeader {
+- (void)setBindHeader:(NSString*)newHeader {
     @synchronized (bindHeader) {
         bindHeader = newHeader;
     }
 }
+
+/* Get approovTokenHeader content
+ *
+ */
+- (NSString*)getApproovTokenHeader {
+    @synchronized (approovTokenHeader) {
+        return approovTokenHeader;
+    }
+}
+
+/* Set approovTokenHeader content
+ *
+ */
+- (void)setApproovTokenHeader:(NSString*)newHeader {
+    @synchronized (approovTokenHeader) {
+        approovTokenHeader = newHeader;
+    }
+}
+
+/* Get approovTokenPrefix content
+ *
+ */
+- (NSString*)getApproovTokenPrefix {
+    @synchronized (approovTokenPrefix) {
+        return approovTokenPrefix;
+    }
+}
+
+/* Set approovTokenPrefix content
+ *
+ */
+- (void)setApproovTokenPrefix:(NSString*)newHeader {
+    @synchronized (approovTokenPrefix) {
+        approovTokenPrefix = newHeader;
+    }
+}
+
 /*
  *  Convenience function fetching the Approov token
  *
@@ -812,7 +849,7 @@ static NSString* bindHeader = @"";
             returnData.decision = ShouldProceed;
             // Set Approov-Token header. We need to modify the original request.
             NSMutableURLRequest *newRequest = [returnData.request mutableCopy];
-            [newRequest setValue:[NSString stringWithFormat:@"%@%@",approovTokenPrefix,approovResult.token] forHTTPHeaderField: kApproovTokenHeader];
+            [newRequest setValue:[NSString stringWithFormat:@"%@%@",approovTokenPrefix,approovResult.token] forHTTPHeaderField: approovTokenHeader];
             returnData.request = newRequest;
             break;
         }
@@ -851,6 +888,8 @@ static NSString* bindHeader = @"";
     NSError* error = [[NSError alloc] initWithDomain:[[NSBundle mainBundle] bundleIdentifier] code:code userInfo:userInfo];
     return error;
 }
+
+
 @end
 
 
