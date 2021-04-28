@@ -23,16 +23,22 @@ The `ApproovURLSession` class mimics the interface of the `NSURLSession` class p
 $ approov sdk -getConfig approov-initial.config
 ```
 
-The `approov-initial.config` file must then be included in you application bundle and automatically loaded by the Approov SDK. It is possible to change the filename and also include the configuration string as a variable by overriding/modifying the `ApproovSDK` class variables in the `ApproovURLSession.m` file.
+The `approov-initial.config` file must then be included in you application bundle and automatically loaded by the Approov SDK. 
 
 ## Approov Token Header
-The default header name of `Approov-Token` can be changed by modifying the variable `kApproovTokenHeader` in `ApproovURLSession.m` file:
+The default header name of `Approov-Token` can be changed by invoking the class method `setApproovTokenHeader` like so:
 
 ```ObjectiveC
-static NSString* kApproovTokenHeader = @"Approov-Token";
+[[ApproovSDK sharedInstance] setApproovTokenHeader:@"Authorization"];
 ```
 
-You may like to change the above value to `Authorization` and prefix the actual Approov JWT Token with `Bearer ` and make use of the resulting header in your integration.
+You may also prefix the actual value bound to the above token header by using `setApproovTokenPrefix`:
+```ObjectiveC
+[[ApproovSDK sharedInstance] setApproovTokenPrefix:@"Bearer "];
+```
+
+This will result in the Approov JWT token being appended to the `Bearer ` value of the `Authorization` header allowing your back end solution to reuse any code relying in `Authorization` header.
+
 
 ## Token Binding
 If you are using [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then set the header holding the value to be used for binding as follows:
@@ -44,7 +50,7 @@ If you are using [Token Binding](https://approov.io/docs/latest/approov-usage-do
 The Approov SDK allows any string value to be bound to a particular token by computing its SHA256 hash and placing its base64 encoded value inside the pay claim of the JWT token. The method `setBindHeader` takes the name of the header holding the value to be bound. This only needs to be called once but the header needs to be present on all API requests using Approov. It is also crucial to use `setBindHeader` before any token fetch occurs, like token prefetching being enabled, since setting the value to be bound invalidates any (pre)fetched token.
 
 ## Token Prefetching
-If you wish to reduce the latency associated with fetching the first Approov token, then a call to `[[ApproovSDK sharedInstance] prefetchApproovToken]` can be made immediately after initialization of the Approov SDK (this happens automatically during ApproovURLSession construction0). This initiates the process of fetching an Approov token as a background task, so that a cached token is available immediately when subsequently needed, or at least the fetch time is reduced. Note that if this feature is being used with [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then the binding must be set prior to the prefetch, as changes to the binding invalidate any cached Approov token.
+If you wish to reduce the latency associated with fetching the first Approov token, then a call to `[ApproovSDK prefetchApproovToken]` can be made immediately after initialization of the Approov SDK (this happens automatically during ApproovURLSession construction0). This initiates the process of fetching an Approov token as a background task, so that a cached token is available immediately when subsequently needed, or at least the fetch time is reduced. Note that if this feature is being used with [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then the binding must be set prior to the prefetch, as changes to the binding invalidate any cached Approov token.
 
 ## Configuration Persistence
 An Approov app automatically downloads any new configurations of APIs and their pins that are available. These are stored in the [`UserDefaults`](https://developer.apple.com/documentation/foundation/userdefaults) for the app in a preference key `approov-dynamic`. You can store the preferences differently by modifying or overriding the methods `storeDynamicConfig` and `readDynamicApproovConfig` in `ApproovURLSession.m`.
