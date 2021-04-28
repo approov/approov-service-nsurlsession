@@ -44,7 +44,7 @@ This will result in the Approov JWT token being appended to the `Bearer ` value 
 If you are using [Token Binding](https://approov.io/docs/latest/approov-usage-documentation/#token-binding) then set the header holding the value to be used for binding as follows:
 
 ```ObjectiveC
-[[ApproovSDK sharedInstance] setBindHeader: "Authorization"]
+[[ApproovSDK sharedInstance] setBindHeader: @"Authorization"]
 ```
 
 The Approov SDK allows any string value to be bound to a particular token by computing its SHA256 hash and placing its base64 encoded value inside the pay claim of the JWT token. The method `setBindHeader` takes the name of the header holding the value to be bound. This only needs to be called once but the header needs to be present on all API requests using Approov. It is also crucial to use `setBindHeader` before any token fetch occurs, like token prefetching being enabled, since setting the value to be bound invalidates any (pre)fetched token.
