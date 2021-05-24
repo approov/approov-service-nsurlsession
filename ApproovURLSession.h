@@ -26,13 +26,13 @@
 *  URLSession initializer
 *  https://developer.apple.com/documentation/foundation/nsurlsession/1411597-sessionwithconfiguration?language=objc
 */
-+ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration;
++ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration                                                   configString:(NSString *)config;
 /*
 *  URLSession initializer
 *   https://developer.apple.com/documentation/foundation/urlsession/1411474-init
 */
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration
-                                      delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue;
+                                      delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue configString:(NSString *)config;
 /*
 *  https://developer.apple.com/documentation/foundation/nsurlsession/1411554-datataskwithurl?language=objc
 */
@@ -141,7 +141,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /* The ApproovSDK interface wrapper */
 @interface ApproovSDK : NSObject
 - (instancetype)init NS_UNAVAILABLE;
-+ (instancetype)sharedInstance;
++ (instancetype)sharedInstance:(NSString*)configString;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetchApproovToken;

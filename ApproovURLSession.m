@@ -65,19 +65,21 @@ NSURLSession* urlSession;
 NSURLSessionConfiguration* urlSessionConfiguration;
 ApproovURLSessionDelegate* urlSessionDelegate;
 NSOperationQueue* delegateQueue;
+ApproovSDK* approovSDK;
 
 /*
  *  URLSession initializer
  *   see ApproovURLSession.h
  */
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration
-     delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue {
+                                      delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue configString:(NSString *)config {
     urlSessionConfiguration = configuration;
     urlSessionDelegate = [[ApproovURLSessionDelegate alloc] initWithDelegate:delegate];
     delegateQueue = queue;
     // Set as URLSession delegate our implementation
     urlSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:urlSessionDelegate delegateQueue:delegateQueue];
-    if ([ApproovSDK sharedInstance] == nil) {
+    approovSDK = [ApproovSDK sharedInstance:config];
+    if (approovSDK == nil) {
         NSLog(@"ApproovURLSession FATAL: Failure instantiating an Approov SDK object");
     }
     return [[ApproovURLSession alloc] init];
@@ -88,8 +90,8 @@ NSOperationQueue* delegateQueue;
  *   see ApproovURLSession.h
  */
 
-+ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration {
-    return [ApproovURLSession sessionWithConfiguration:configuration delegate:nil delegateQueue:nil];
++ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration                                                   configString:(NSString *)config {
+    return [ApproovURLSession sessionWithConfiguration:configuration delegate:nil delegateQueue:nil configString:config];
 }
 
 - (instancetype)init {
@@ -123,7 +125,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDataTask* sessionDataTask;
     if (approovData == nil){
@@ -163,7 +165,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDataTask* sessionDataTask;
     if (approovData == nil){
@@ -231,7 +233,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
     if (approovData == nil){
@@ -271,7 +273,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request
                                     completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
     if (approovData == nil){
@@ -340,7 +342,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -381,7 +383,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
          fromFile:(NSURL *)fileURL
                                 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -431,7 +433,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -470,7 +472,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromData:(NSData *)bodyData {
         NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-        ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+        ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
         // The return object
         NSURLSessionUploadTask* sessionUploadTask;
         if (approovData == nil){
@@ -510,7 +512,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
          fromData:(NSData *)bodyData
                                 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -569,7 +571,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionWebSocketTask *)webSocketTaskWithRequest:(NSURLRequest *)request  API_AVAILABLE(ios(13.0)){
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [[ApproovSDK sharedInstance] fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionWebSocketTask* sessionWebSocketTask;
     if (approovData == nil){
@@ -670,13 +672,16 @@ static NSString* approovTokenPrefix = @"";
 static NSString* bindHeader = @"";
 
 // Shared instance
-+ (instancetype)sharedInstance {
++ (instancetype)sharedInstance: (NSString*)configString {
     static ApproovSDK *shared = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         shared = [[self alloc] init];
-        /* Read initial config string */
-        NSString* initialConfigString = [shared readInitialApproovConfig];
+        /* Read initial config string if not provided as parameter*/
+        NSString* initialConfigString = nil;
+        if (configString != nil) initialConfigString = configString;
+        else initialConfigString = [shared readInitialApproovConfig];
+        /* Check we either have short config string or we did read initial config file */
         if(initialConfigString == nil){
             NSLog(@"ApproovURLSession FATAL: Unable to read Approov SDK initial config");
             shared = nil;
@@ -743,7 +748,7 @@ static NSString* bindHeader = @"";
  */
 
 + (void)prefetchApproovToken {
-    if ([ApproovSDK sharedInstance]){
+    if (approovSDK != nil){
         // We succeeded initializing Approov SDK, fetch a token
         [Approov fetchApproovToken:^(ApproovTokenFetchResult* result) {
             // Prefetch done, no need to process response
@@ -814,22 +819,21 @@ static NSString* bindHeader = @"";
     // Save the original request
     [returnData setRequest:request];
     // Get the shared instance handle, which initializes the Approov SDK
-    ApproovSDK *handle = [ApproovSDK sharedInstance];
-    if(handle == nil){
+    if(approovSDK == nil){
         NSError *error = [ApproovSDK createErrorWithCode:1001 errorMessage:@"FATAL: Failed creating ApproovSDK shared instance"];
         [returnData setError:error];
         return returnData;
     }
     // Check if Bind Header is set to a non empty String
-    if (![[ApproovSDK getBindHeader] isEqualToString:@""]){
+    if (![[approovSDK getBindHeader] isEqualToString:@""]){
         /*  Query the NSURLSessionConfiguration for user set headers. They would be set like so:
         *  [config setHTTPAdditionalHeaders:@{@"Authorization Bearer " : @"token"}];
         *  Since the NSURLSessionConfiguration is part of the init call and we store its reference
         *  we check for the presence of a user set header there.
         */
-        if([request valueForHTTPHeaderField:[ApproovSDK getBindHeader]] != nil){
+        if([request valueForHTTPHeaderField:[approovSDK getBindHeader]] != nil){
             // Add the Bind Header as a data hash to Approov token
-            [Approov setDataHashInToken:[request valueForHTTPHeaderField:[ApproovSDK getBindHeader]]];
+            [Approov setDataHashInToken:[request valueForHTTPHeaderField:[approovSDK getBindHeader]]];
         }
     }
     // Invoke fetch token sync
