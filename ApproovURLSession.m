@@ -939,6 +939,7 @@ static NSDictionary<NSString *, NSDictionary<NSNumber *, NSData *> *> *sSPKIHead
             [self initializePKI];
         }
         approovURLDelegate = delegate;
+        return self;
     }
     return nil;
 }
@@ -1278,10 +1279,17 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
         if([pins objectForKey:host] != nil){
             // We have on or more cert hashes matching the receivers host, compare them
             NSArray<NSString*>* certHashList = [pins objectForKey:host];
-            if (certHashList.count == 0) return serverTrust;  // We do not pin connection
-            for (NSString* certHash in certHashList){
-                if([certHash isEqualToString:publicKeyHashBase64]) return serverTrust;
+            if (certHashList.count == 0) {
+                return serverTrust;  // We do not pin connection explicitly setting no pins for the host
             }
+            for (NSString* certHash in certHashList){
+                if([certHash isEqualToString:publicKeyHashBase64]) {
+                    return serverTrust;
+                }
+            }
+        } else {
+            // Host is not pinned
+            return serverTrust;
         }
         indexCurrentCert += 1;
     }
@@ -1342,5 +1350,6 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
 }
 
 @end
+
 
 
