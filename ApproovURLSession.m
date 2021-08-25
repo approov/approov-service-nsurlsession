@@ -759,7 +759,7 @@ static NSString* bindHeader = @"";
 /* Get bindHeader content
  *
  */
-- (NSString*)getBindHeader {
++ (NSString*)getBindHeader {
     @synchronized (bindHeader) {
         return bindHeader;
     }
@@ -768,7 +768,7 @@ static NSString* bindHeader = @"";
 /* Set bindHeader content
  *
  */
-- (void)setBindHeader:(NSString*)newHeader {
++ (void)setBindHeader:(NSString*)newHeader {
     @synchronized (bindHeader) {
         bindHeader = newHeader;
     }
@@ -825,15 +825,15 @@ static NSString* bindHeader = @"";
         return returnData;
     }
     // Check if Bind Header is set to a non empty String
-    if (![[approovSDK getBindHeader] isEqualToString:@""]){
+    if (![[ApproovSDK getBindHeader] isEqualToString:@""]){
         /*  Query the NSURLSessionConfiguration for user set headers. They would be set like so:
         *  [config setHTTPAdditionalHeaders:@{@"Authorization Bearer " : @"token"}];
         *  Since the NSURLSessionConfiguration is part of the init call and we store its reference
         *  we check for the presence of a user set header there.
         */
-        if([request valueForHTTPHeaderField:[approovSDK getBindHeader]] != nil){
+        if([request valueForHTTPHeaderField:[ApproovSDK getBindHeader]] != nil){
             // Add the Bind Header as a data hash to Approov token
-            [Approov setDataHashInToken:[request valueForHTTPHeaderField:[approovSDK getBindHeader]]];
+            [Approov setDataHashInToken:[request valueForHTTPHeaderField:[ApproovSDK getBindHeader]]];
         }
     }
     // Invoke fetch token sync
