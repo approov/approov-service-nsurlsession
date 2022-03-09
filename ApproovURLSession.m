@@ -670,6 +670,10 @@ static NSString* approovTokenHeader = @"Approov-Token";
 static NSString* approovTokenPrefix = @"";
 /* Bind header string */
 static NSString* bindHeader = @"";
+/* map of headers that should have their values substituted for secure strings, mapped to their
+ required prefixes
+ */
+static NSMutableDictionary<NSString*, NSString*>* substitutionHeaders;
 
 // Shared instance
 + (instancetype)sharedInstance: (NSString*)configString {
@@ -811,6 +815,146 @@ static NSString* bindHeader = @"";
 }
 
 /*
+ * Adds the name of a header which should be subject to secure strings substitution. This
+ * means that if the header is present then the value will be used as a key to look up a
+ * secure string value which will be substituted into the header value instead. This allows
+ * easy migration to the use of secure strings. Note that this should be done on initialization
+ * rather than for every request as it will require a new OkHttpClient to be built. A required
+ * prefix may be specified to deal with cases such as the use of "Bearer " prefixed before values
+ * in an authorization header.
+ *
+ * @param header is the header to be marked for substitution
+ * @param requiredPrefix is any required prefix to the value being substituted or nil if not required
+ */
+- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix {
+    if (prefix == nil) {
+        @synchronized(substitutionHeaders){
+            [substitutionHeaders setValue:@"" forKey:header];
+        }
+    } else {
+        @synchronized(substitutionHeaders){
+            [substitutionHeaders setValue:prefix forKey:header];
+        }
+    }
+}
+
+/*
+ * Removes a header previously added using addSubstitutionHeader.
+ *
+ * @param header is the header to be removed for substitution
+ */
+-(void)removeSubstitutionHeader:(NSString*)header {
+    @synchronized(substitutionHeaders){
+        [substitutionHeaders removeObjectForKey:header];
+    }
+}
+
+/*
+ * Fetches a secure string with the given key. If newDef is not null then a
+ * secure string for the particular app instance may be defined. In this case the
+ * new value is returned as the secure string. Use of an empty string for newDef removes
+ * the string entry. Note that this call may require network transaction and thus may block
+ * for some time, so should not be called from the UI thread. If the attestation fails
+ * for any reason then nil is returned. Note that the returned string
+ * should NEVER be cached by your app, you should call this function when it is needed.
+ *
+ * @param key is the secure string key to be looked up
+ * @param newDef is any new definition for the secure string, or nil for lookup only
+ * @param error is a pointer to a NSError type containing optional error message
+ * @return secure string (should not be cached by your app) or nil if it was not defined or an error ocurred
+ */
+-(NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error  {
+    // determine the type of operation as the values themselves cannot be logged
+    NSString* type = @"lookup";
+    if (newDef != nil)
+        type = @"definition";
+    // fetch any secure string keyed by the value, catching any exceptions the SDK might throw
+    ApproovTokenFetchResult* approovResult = [Approov fetchSecureStringAndWait:key :newDef];
+    // Log result of token fetch operation but do not log the value
+    NSLog(@"ApproovURLSession: fetchSecureString %@ : %@", type, [Approov stringFromApproovTokenFetchStatus:approovResult.status]);
+    // Process the returned Approov status
+    if (approovResult.status == ApproovTokenFetchStatusDisabled) {
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusDisabled userInfo:@{@"Error reason":@"Secure String feature must be enabled using CLI"}];
+        return nil;
+    } else if (approovResult.status == ApproovTokenFetchStatusBadKey) {
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusBadKey userInfo:@{@"Error reason":@"Bad/Missing key"}];
+        return nil;
+    } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
+        // if the request is rejected then we provide a special exception with additional information
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString "];
+        [details appendString:[NSString stringWithFormat:@" %@ for %@: %@ ",type, key, [Approov stringFromApproovTokenFetchStatus:approovResult.status]]];
+        [details appendString:[NSString stringWithFormat:@" %@  %@",approovResult.ARC,approovResult.rejectionReasons]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusRejected userInfo:@{@"Error reason":details}];
+        return nil;
+    } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
+               (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
+               (approovResult.status == ApproovTokenFetchStatusMITMDetected)) {
+        // we are unable to get the secure string due to network conditions so the request can
+        // be retried by the user later
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString "];
+        [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusNoNetwork userInfo:@{@"Error reason":details}];
+        return nil;
+    } else if ((approovResult.status != ApproovTokenFetchStatusSuccess) && (approovResult.status != ApproovTokenFetchStatusUnknownKey)) {
+        // we are unable to get the secure string due to a more permanent error
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString "];
+        [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusSuccess userInfo:@{@"Error reason":details}];
+        return nil;
+    }
+    return approovResult.secureString;
+}
+
+/*
+ * Fetches a custom JWT with the given payload. Note that this call will require network
+ * transaction and thus will block for some time, so should not be called from the UI thread.
+ * If the attestation fails for any reason then an IOException is thrown. This will be
+ * ApproovRejectionException if the app has failed Approov checks or ApproovNetworkException
+ * for networking issues where a user initiated retry of the operation should be allowed.
+ *
+ * @param payload is the marshaled JSON object for the claims to be included
+ * @param error is a pointer to a NSError type containing optional error message
+ * @return custom JWT string or nil if an error occurred
+ */
+-(NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error {
+    // fetch the custom JWT
+    ApproovTokenFetchResult* approovResult = [Approov fetchCustomJWTAndWait:payload];
+    // Log result of token fetch operation but do not log the value
+    NSLog(@"ApproovURLSession: fetchCustomJWT %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]);
+    // process the returned Approov status
+    if (approovResult.status == ApproovTokenFetchStatusBadPayload) {
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusBadPayload userInfo:@{@"Error reason":@"JSON payload malformed"}];
+        return nil;
+    } else if(approovResult.status == ApproovTokenFetchStatusDisabled){
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusDisabled userInfo:@{@"Error reason":@"JWE feature must be enabled using CLI"}];
+        return nil;
+    } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
+        // if the request is rejected then we provide a special exception with additional information
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT "];
+        [details appendString:[NSString stringWithFormat:@" %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]]];
+        [details appendString:[NSString stringWithFormat:@" %@  %@",approovResult.ARC,approovResult.rejectionReasons]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusRejected userInfo:@{@"Error reason":details}];
+        return nil;
+    } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
+               (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
+               (approovResult.status == ApproovTokenFetchStatusMITMDetected)) {
+        // we are unable to get the JWT due to network conditions so the request can
+        // be retried by the user later
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT "];
+        [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusNoNetwork userInfo:@{@"Error reason":details}];
+        return nil;
+    } else if (approovResult.status != ApproovTokenFetchStatusSuccess) {
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT "];
+        [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusDisabled userInfo:@{@"Error reason":details}];
+        return nil;
+    }
+    
+    return approovResult.token;
+}
+
+/*
  *  Convenience function fetching the Approov token
  *
  */
@@ -862,7 +1006,7 @@ static NSString* bindHeader = @"";
         case ApproovTokenFetchStatusMITMDetected: {
             // Must not proceed with network request and inform user a retry is needed
             returnData.decision = ShouldRetry;
-            NSError* error = [ApproovSDK createErrorWithCode:1003 errorMessage:returnData.sdkMessage];
+            NSError* error = [ApproovSDK createErrorWithCode:ApproovTokenFetchStatusNoNetwork errorMessage:returnData.sdkMessage];
             returnData.error = error;
             break;
         }
@@ -880,6 +1024,62 @@ static NSString* bindHeader = @"";
             break;
         }
     }
+    
+    // we now deal with any header substitutions, which may require further fetches but these
+    // should be using cached results
+    BOOL isIllegalSubstitution = (approovResult.status == ApproovTokenFetchStatusUnknownURL);
+    // Make a copy of the original request
+    NSMutableURLRequest *newRequest = [returnData.request mutableCopy];
+    NSDictionary<NSString*,NSString*>* allHeaders = newRequest.allHTTPHeaderFields;
+    for (NSString* key in substitutionHeaders.allKeys) {
+        NSString* header = key;
+        NSString* prefix = [substitutionHeaders objectForKey:key];
+        NSString* value = [allHeaders objectForKey:header];
+        // Check if the request contains the header we want to replace
+        if ((value != nil) && ([value hasPrefix:prefix]) && (value.length > prefix.length)){
+            approovResult = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
+            NSLog(@"Substituting header: %@, %@", header, [Approov stringFromApproovTokenFetchStatus:approovResult.status]);
+            if (approovResult.status == ApproovTokenFetchStatusSuccess) {
+                if (isIllegalSubstitution){
+                    // don't allow substitutions on unadded API domains to prevent them accidentally being
+                    // subject to a Man-in-the-Middle (MitM) attack
+                    NSString* message = [NSString stringWithFormat:@"Header substitution for %@ illigal for %@ that is not an added API domain",header, newRequest.URL];
+                    NSError* error = [ApproovSDK createErrorWithCode:ApproovTokenFetchStatusSuccess errorMessage:message];
+                    returnData.error = error;
+                    break;
+                }
+                // We add the modified header to the new copy of request
+                [newRequest setValue:[NSString stringWithFormat:@"%@%@",prefix,approovResult.secureString] forHTTPHeaderField: header];
+            } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
+                // if the request is rejected then we provide a special exception with additional information
+                NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
+                [details appendString:[NSString stringWithFormat:@" %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]]];
+                [details appendString:[NSString stringWithFormat:@" %@  %@",approovResult.ARC,approovResult.rejectionReasons]];
+                NSError* error = [ApproovSDK createErrorWithCode:ApproovTokenFetchStatusRejected errorMessage:details];
+                returnData.error = error;
+                break;
+            } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
+                       (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
+                       (approovResult.status == ApproovTokenFetchStatusMITMDetected)) {
+                // we are unable to get the secure string due to network conditions so the request can
+                // be retried by the user later
+                NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
+                [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+                NSError *error = [ApproovSDK createErrorWithCode:ApproovTokenFetchStatusNoNetwork errorMessage:details];
+                returnData.error = error;
+                break;
+            } else if (approovResult.status == ApproovTokenFetchStatusUnknownKey) {
+                // we have failed to get a secure string with a more serious permanent error
+                NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
+                [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
+                NSError *error = [ApproovSDK createErrorWithCode:ApproovTokenFetchStatusUnknownKey errorMessage:details];
+                returnData.error = error;
+                break;
+            }
+        }
+    }//for loop
+    // Add the modified request to the return data
+    returnData.request = newRequest;
     return returnData;
 }
 
@@ -889,7 +1089,7 @@ static NSString* bindHeader = @"";
     NSLocalizedFailureReasonErrorKey: NSLocalizedString(message, nil),
     NSLocalizedRecoverySuggestionErrorKey: NSLocalizedString(message, nil)
                             };
-    NSError* error = [[NSError alloc] initWithDomain:[[NSBundle mainBundle] bundleIdentifier] code:code userInfo:userInfo];
+    NSError* error = [[NSError alloc] initWithDomain:@"io.approov.ApproovURLSession" code:code userInfo:userInfo];
     return error;
 }
 
