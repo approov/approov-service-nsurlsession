@@ -145,6 +145,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetchApproovToken;
+/* The ApproovSDK error enum status codes mapped to a NSString */
++ (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
 - (NSString*)getApproovTokenHeader;
 - (void)setApproovTokenHeader:(NSString*)newHeader;
 - (NSString*)getApproovTokenPrefix;
@@ -154,7 +156,11 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
 - (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 @end
+
+
+
 #endif /* ApproovURLSession_h */
+
 
 
 
