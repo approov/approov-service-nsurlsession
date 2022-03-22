@@ -755,7 +755,7 @@ static NSString* ApproovSDKARCKey = @"ARC";
  *  expensive the prefetch seems reasonable.
  */
 
-+ (void)prefetchApproovToken {
++ (void)prefetch {
     if (approovSDK != nil){
         // We succeeded initializing Approov SDK, fetch a token
         [Approov fetchApproovToken:^(ApproovTokenFetchResult* result) {
@@ -889,7 +889,9 @@ static NSString* ApproovSDKARCKey = @"ARC";
         *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:@"Secure String feature must be enabled using CLI" ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusBadKey) {
-        *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusBadKey userInfo:@{@"Error reason":@"Bad/Missing key"}];
+        if (error != nil) {
+            *error = [NSError errorWithDomain:@"io.approov.ApproovURLSession" code:ApproovTokenFetchStatusBadKey userInfo:@{@"Error reason":@"Bad/Missing key"}];
+        }
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
@@ -931,15 +933,21 @@ static NSString* ApproovSDKARCKey = @"ARC";
     NSLog(@"ApproovURLSession: fetchCustomJWT %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]);
     // process the returned Approov status
     if (approovResult.status == ApproovTokenFetchStatusBadPayload) {
-        *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: Malformed JSON" ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        if (error != nil){
+            *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: Malformed JSON" ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        }
         return nil;
     } else if(approovResult.status == ApproovTokenFetchStatusDisabled){
-        *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: JWE feature must be enabled using CLI" ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        if (error != nil){
+            *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: JWE feature must be enabled using CLI" ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        }
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT rejected"];
-        *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        if (error != nil){
+            *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        }
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
                (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -947,12 +955,16 @@ static NSString* ApproovSDKARCKey = @"ARC";
         // we are unable to get the JWT due to network conditions so the request can
         // be retried by the user later
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT Network error, retry needed."];
-        *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        if (error != nil){
+            *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        }
         return nil;
     } else if (approovResult.status != ApproovTokenFetchStatusSuccess) {
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT Failure during attestation."];
         [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
-        *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        if (error != nil){
+            *error = [ApproovSDK createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovSDK stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC];
+        }
         return nil;
     }
     

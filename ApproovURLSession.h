@@ -144,7 +144,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 + (instancetype)sharedInstance:(NSString*)configString;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
-+ (void)prefetchApproovToken;
++ (void)prefetch;
 /* The ApproovSDK error enum status codes mapped to a NSString */
 + (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
 - (NSString*)getApproovTokenHeader;
