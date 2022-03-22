@@ -685,68 +685,17 @@ static NSString* ApproovSDKARCKey = @"ARC";
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         shared = [[self alloc] init];
-        /* Read initial config string if not provided as parameter*/
-        NSString* initialConfigString = nil;
-        if (configString != nil) initialConfigString = configString;
-        else initialConfigString = [shared readInitialApproovConfig];
-        /* Check we either have short config string or we did read initial config file */
-        if(initialConfigString == nil){
-            NSLog(@"ApproovURLSession FATAL: Unable to read Approov SDK initial config");
-            shared = nil;
-            return;
-        }
-        /* Read dynamic config  */
-        NSString* dynamicConfigString = [shared readDynamicApproovConfig];
-        /* Initialise Approov SDK */
         NSError* error = nil;
-        [Approov initialize:initialConfigString updateConfig:dynamicConfigString comment:nil error:&error];
+        [Approov initialize:initialConfigString updateConfig:@"auto" comment:nil error:&error];
         if (error != nil) {
             NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", error.localizedDescription);
             shared = nil;
             return;
         }
-        /* Save updated SDK config if this is the first ever app launch */
-        if (dynamicConfigString == nil) {
-            [shared storeApproovDynamicConfig:[Approov fetchConfig]];
-        }
     });
     return shared;
 }
 
-- (NSString*)readInitialApproovConfig {
-    NSString* path = [[NSBundle mainBundle] pathForResource:kApproovInitialKey
-    ofType:kConfigFileExtension];
-    if([[NSFileManager defaultManager] fileExistsAtPath:path]){
-        NSError* error;
-        NSString* content = [NSString stringWithContentsOfFile:path
-        encoding:NSUTF8StringEncoding
-           error:&error];
-        if(error != nil){
-            NSLog(@"ApproovURLSession FATAL: Error attempting to read pins from \(%@): \(%@)",path,error);
-            return nil;
-        }
-        return content;
-    }
-    return nil;
-}
-
-/*
- * Reads any previously-saved dynamic configuration for the Approov SDK. May return 'nil' if a
- * dynamic configuration has not yet been saved by calling saveApproovDynamicConfig().
- */
-- (NSString*)readDynamicApproovConfig {
-    return [[NSUserDefaults standardUserDefaults] objectForKey:kApproovDynamicKey];
-}
-
-/*
- * Saves the Approov dynamic configuration to the user defaults database which is persisted
- * between app launches. This should be called after every Approov token fetch where
- * isConfigChanged is set. It saves a new configuration received from the Approov server to
- * the user defaults database so that it is available on app startup on the next launch.
- */
-- (void)storeApproovDynamicConfig:(NSString*)newConfig {
-    [[NSUserDefaults standardUserDefaults] setValue:newConfig forKey:kApproovDynamicKey];
-}
 
 /*
  *  Allows token prefetch operation to be performed as early as possible. This
