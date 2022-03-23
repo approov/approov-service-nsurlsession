@@ -779,8 +779,7 @@ static NSString* ApproovSDKARCKey = @"ARC";
  * Adds the name of a header which should be subject to secure strings substitution. This
  * means that if the header is present then the value will be used as a key to look up a
  * secure string value which will be substituted into the header value instead. This allows
- * easy migration to the use of secure strings. Note that this should be done on initialization
- * rather than for every request as it will require a new OkHttpClient to be built. A required
+ * easy migration to the use of secure strings. A required
  * prefix may be specified to deal with cases such as the use of "Bearer " prefixed before values
  * in an authorization header.
  *
