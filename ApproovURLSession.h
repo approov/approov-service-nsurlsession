@@ -139,7 +139,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 @end
 
 /* The ApproovSDK interface wrapper */
-@interface ApproovSDK : NSObject
+@interface ApproovService : NSObject
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)sharedInstance:(NSString*)configString;
 + (void)setBindHeader:(NSString*)newHeader;
