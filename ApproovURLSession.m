@@ -768,8 +768,13 @@ static NSString* RetryLastOperationKey = @"RetryLastOperation";
         [Approov initialize:configString updateConfig:@"auto" comment:nil error:&error];
         if (error != nil) {
             NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", error.localizedDescription);
-            shared = nil;
-            return;
+            /* NOTE: We do not want to return nil, since if there is a failure during Approov SDK creation, we
+             * we really want to allow the actual SDK to report the error by populating the NSError variable
+             * and inform the user. In the current context, this is impossible so we proceed regardless.
+             //shared = nil;
+             //return;
+             */
+            
         }
     });
     return shared;
