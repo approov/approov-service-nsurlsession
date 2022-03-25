@@ -1011,12 +1011,6 @@ static NSString* RetryLastOperationKey = @"RetryLastOperation";
     ApproovData *returnData = [[ApproovData alloc] init];
     // Save the original request
     [returnData setRequest:request];
-    // Get the shared instance handle, which initializes the Approov SDK
-    if(approovSDK == nil){
-        NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:@"FATAL: Failed creating ApproovService shared instance" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil  canRetry:NO];
-        [returnData setError:error];
-        return returnData;
-    }
     // Check if Bind Header is set to a non empty String
     if (![[ApproovService getBindHeader] isEqualToString:@""]){
         /*  Query the NSURLSessionConfiguration for user set headers. They would be set like so:
