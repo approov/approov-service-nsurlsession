@@ -33,8 +33,23 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 @end
 
 /* The ApproovSDK interface wrapper */
-@interface ApproovService()
+@interface ApproovService:NSObject
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)sharedInstance:(NSString*)configString;
++ (void)setBindHeader:(NSString*)newHeader;
++ (NSString*)getBindHeader;
++ (void)prefetch;
+/* The ApproovSDK error enum status codes mapped to a NSString */
++ (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
+- (NSString*)getApproovTokenHeader;
+- (void)setApproovTokenHeader:(NSString*)newHeader;
+- (NSString*)getApproovTokenPrefix;
+- (void)setApproovTokenPrefix:(NSString*)newHeader;
+- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix;
+- (void)removeSubstitutionHeader:(NSString*)header;
 - (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
+- (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
+- (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 @end
 
 /* The custom delegate */
@@ -79,9 +94,6 @@ ApproovService* approovSDK;
     // Set as URLSession delegate our implementation
     urlSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:urlSessionDelegate delegateQueue:delegateQueue];
     approovSDK = [ApproovService sharedInstance:config];
-    if (approovSDK == nil) {
-        NSLog(@"ApproovURLSession FATAL: Failure instantiating an Approov SDK object");
-    }
     return [[ApproovURLSession alloc] init];
 }
 
@@ -655,7 +667,73 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     }
     return [newRequest copy];
 }
+
+#pragma mark ApproovService interface
+/* Set and gets bindHeader content for the ApproovService
+ * Those are static variables and do not depend on Approov SDK being initialized
+ */
++ (void)setBindHeader:(NSString*)newHeader {
+    [ApproovService setBindHeader:newHeader];
+}
+
++ (NSString*)getBindHeader {
+    return [ApproovService getBindHeader];
+}
+/* Enables the ApproovService prefetch operation
+ *
+ */
++ (void)prefetch {
+    [ApproovService prefetch];
+}
+
+/* ApproovService token header set/get
+ *
+ */
+- (NSString*)getApproovTokenHeader {
+    if (approovSDK != nil) return [approovSDK getApproovTokenHeader];
+    return nil;
+}
+- (void)setApproovTokenHeader:(NSString*)newHeader {
+    if (approovSDK != nil)  [approovSDK setApproovTokenHeader:newHeader];
+}
+
+/* ApproovService token header prefix set/get
+ *
+ */
+- (NSString*)getApproovTokenPrefix {
+    if (approovSDK != nil)  return [approovSDK getApproovTokenPrefix];
+    return nil;
+}
+- (void)setApproovTokenPrefix:(NSString*)newHeader {
+    if (approovSDK != nil) [approovSDK setApproovTokenPrefix:newHeader];
+}
+
+/* ApproovService header substitution
+ *
+ */
+- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix {
+    if (approovSDK != nil) [approovSDK addSubstitutionHeader:header requiredPrefix:prefix];
+}
+- (void)removeSubstitutionHeader:(NSString*)header {
+    if (approovSDK != nil) [approovSDK removeSubstitutionHeader:header];
+}
+
+/*  ApproovService fetchSecureString feature
+ *  Note: we return a valid error if the Approov SDK has not been initialized
+ */
+- (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error {
+    return [approovSDK fetchSecureString:key newDefinition:newDef error:error];
+}
+
+/*  ApproovService fetchCustomJWT feature
+ *  Note: we return a valid error if the Approov SDK has not been initialized
+ */
+- (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error{
+    return [approovSDK fetchCustomJWT:payload error:error];
+}
+
 @end
+
 
 @implementation ApproovService
 /* Dynamic configuration string key in user default database */
