@@ -32,24 +32,9 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 @property NSError* error;
 @end
 
-/* The ApproovSDK interface wrapper */
-@interface ApproovService:NSObject
-- (instancetype)init NS_UNAVAILABLE;
-+ (instancetype)sharedInstance:(NSString*)configString;
-+ (void)setBindHeader:(NSString*)newHeader;
-+ (NSString*)getBindHeader;
-+ (void)prefetch;
-/* The ApproovSDK error enum status codes mapped to a NSString */
-+ (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
-- (NSString*)getApproovTokenHeader;
-- (void)setApproovTokenHeader:(NSString*)newHeader;
-- (NSString*)getApproovTokenPrefix;
-- (void)setApproovTokenPrefix:(NSString*)newHeader;
-- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix;
-- (void)removeSubstitutionHeader:(NSString*)header;
+/* The ApproovSDK attestation function */
+@interface ApproovService ()
 - (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
-- (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
-- (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 @end
 
 /* The custom delegate */
@@ -758,23 +743,28 @@ static NSString* ApproovSDKRejectionReasonsKey = @"RejectionReasons";
 static NSString* ApproovSDKARCKey = @"ARC";
 static NSString* RetryLastOperationKey = @"RetryLastOperation";
 
-// Shared instance
-+ (instancetype)sharedInstance: (NSString*)configString {
+// Shared instance provides a sinleton implementation
++ (instancetype)sharedInstance: (NSString*)configString errorMessage:(NSError**)error{
     static ApproovService *shared = nil;
     static dispatch_once_t onceToken;
+    // We need to do this to avoid compiler complaining about retain/release
+    __block NSError* localError = nil;
+    /* Initialise Approov SDK only ever once */
     dispatch_once(&onceToken, ^{
         shared = [[self alloc] init];
-        NSError* error = nil;
-        [Approov initialize:configString updateConfig:@"auto" comment:nil error:&error];
-        if (error != nil) {
-            NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", error.localizedDescription);
-            /* NOTE: We do not want to return nil, since if there is a failure during Approov SDK creation, we
-             * we really want to allow the actual SDK to report the error by populating the NSError variable
-             * and inform the user. In the current context, this is impossible so we proceed regardless.
-             //shared = nil;
-             //return;
-             */
-            
+        /* Check we either have short config string or we did read initial config file */
+        if(configString == nil){
+            NSLog(@"ApproovURLSession FATAL: Unable to initialize Approov SDK with provided config");
+            shared = nil;
+            return;
+        }
+        
+        [Approov initialize:configString updateConfig:@"auto" comment:nil error:&localError];
+        if (localError != nil) {
+            NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", localError.localizedDescription);
+            shared = nil;
+            *error = [localError mutableCopy];
+            return;
         }
     });
     return shared;
