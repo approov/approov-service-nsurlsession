@@ -142,7 +142,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /* The ApproovSDK interface wrapper */
 @interface ApproovService : NSObject
 - (instancetype)init NS_UNAVAILABLE;
-+ (instancetype)sharedInstance:(NSString*)configString errorMessage:(NSError**)error;
++ (instancetype)sharedInstance:(NSString*)configString errorMessage:(__strong NSError**)__strong error;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetch;
