@@ -687,6 +687,8 @@ static NSString* ApproovSDKARCKey = @"ARC";
 static NSString* RetryLastOperationKey = @"RetryLastOperation";
 // The singleton object
 static ApproovService *shared = nil;
+// The original config string used during intialization
+static NSString* initialConfigString = nil;
 
 // Shared default instance
 + (instancetype)shared {
@@ -694,8 +696,14 @@ static ApproovService *shared = nil;
 }
 
 // Shared instance provides a sinleton implementation
-+ (instancetype)sharedInstance: (NSString*)configString errorMessage:(__strong NSError**)__strong error{
-    
++ (instancetype)sharedInstance: (NSString*)configString errorMessage:(__strong NSError**)__strong error {
+    // Check if we already have single instance initialized and we attempt to use a different configString
+    if ((shared != nil) && (initialConfigString != nil)) {
+        if (![initialConfigString isEqualToString:configString]) {
+            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK alreay initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            return nil;
+        }
+    }
     static dispatch_once_t onceToken;
     /* Initialise Approov SDK only ever once */
     dispatch_once(&onceToken, ^{
@@ -715,6 +723,7 @@ static ApproovService *shared = nil;
             *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:localError.localizedDescription ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return;
         }
+        initialConfigString = configString;
     });
     return shared;
 }
