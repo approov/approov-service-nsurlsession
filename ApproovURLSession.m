@@ -653,69 +653,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     return [newRequest copy];
 }
 
-#pragma mark ApproovService interface
-/* Set and gets bindHeader content for the ApproovService
- * Those are static variables and do not depend on Approov SDK being initialized
- */
-+ (void)setBindHeader:(NSString*)newHeader {
-    [ApproovService setBindHeader:newHeader];
-}
-
-+ (NSString*)getBindHeader {
-    return [ApproovService getBindHeader];
-}
-/* Enables the ApproovService prefetch operation
- *
- */
-+ (void)prefetch {
-    [ApproovService prefetch];
-}
-
-/* ApproovService token header set/get
- *
- */
-- (NSString*)getApproovTokenHeader {
-    if (approovSDK != nil) return [approovSDK getApproovTokenHeader];
-    return nil;
-}
-- (void)setApproovTokenHeader:(NSString*)newHeader {
-    if (approovSDK != nil)  [approovSDK setApproovTokenHeader:newHeader];
-}
-
-/* ApproovService token header prefix set/get
- *
- */
-- (NSString*)getApproovTokenPrefix {
-    if (approovSDK != nil)  return [approovSDK getApproovTokenPrefix];
-    return nil;
-}
-- (void)setApproovTokenPrefix:(NSString*)newHeader {
-    if (approovSDK != nil) [approovSDK setApproovTokenPrefix:newHeader];
-}
-
-/* ApproovService header substitution
- *
- */
-- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix {
-    if (approovSDK != nil) [approovSDK addSubstitutionHeader:header requiredPrefix:prefix];
-}
-- (void)removeSubstitutionHeader:(NSString*)header {
-    if (approovSDK != nil) [approovSDK removeSubstitutionHeader:header];
-}
-
-/*  ApproovService fetchSecureString feature
- *  Note: we return a valid error if the Approov SDK has not been initialized
- */
-- (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error {
-    return [approovSDK fetchSecureString:key newDefinition:newDef error:error];
-}
-
-/*  ApproovService fetchCustomJWT feature
- *  Note: we return a valid error if the Approov SDK has not been initialized
- */
-- (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error{
-    return [approovSDK fetchCustomJWT:payload error:error];
-}
 
 @end
 
