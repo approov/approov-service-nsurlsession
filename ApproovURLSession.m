@@ -658,13 +658,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 
 @implementation ApproovService
-/* Dynamic configuration string key in user default database */
-static NSString* kApproovDynamicKey = @"approov-dynamic";
-/* Initial configuration string/filename for Approov SDK */
-static NSString* kApproovInitialKey = @"approov-initial";
-/* Initial configuration file extention for Approov SDK */
-static NSString* kConfigFileExtension = @"config";
-/* Approov token default header */
 static NSString* approovTokenHeader = @"Approov-Token";
 /* Approov token custom prefix: any prefix to be added such as "Bearer " */
 static NSString* approovTokenPrefix = @"";
