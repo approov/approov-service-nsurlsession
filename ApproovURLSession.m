@@ -75,7 +75,7 @@ ApproovService* approovSDK;
  *   see ApproovURLSession.h
  */
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration
-                                      delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue configString:(NSString *)config {
+                                      delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue {
     urlSessionConfiguration = configuration;
     urlSessionDelegate = [[ApproovURLSessionDelegate alloc] initWithDelegate:delegate];
     delegateQueue = queue;
@@ -90,8 +90,8 @@ ApproovService* approovSDK;
  *   see ApproovURLSession.h
  */
 
-+ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration                                                   configString:(NSString *)config {
-    return [ApproovURLSession sessionWithConfiguration:configuration delegate:nil delegateQueue:nil configString:config];
++ (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration {
+    return [ApproovURLSession sessionWithConfiguration:configuration delegate:nil delegateQueue:nil];
 }
 
 - (instancetype)init {
@@ -127,16 +127,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // The return object
     NSURLSessionDataTask* sessionDataTask;
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    // We check to see if the ApproovService singleton has been succesfully initialized
-    if (approovSDK == nil) {
-        // We create a task and cancel it immediately
-        sessionDataTask = [urlSession dataTaskWithRequest:request];
-        [sessionDataTask cancel];
-        // We should retry doing a fetch after a user driven event
-        // Tell the delagate we are marking the session as invalid
-        NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:@"ApproovService not initialized" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
-        [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:error];
-    }
     ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
     if (approovData == nil){
         // Approov SDK call failed, go ahead and make the API call with the original request object
@@ -692,40 +682,47 @@ static NSString* initialConfigString = nil;
 
 // Shared default instance
 + (instancetype)shared {
-    return shared;
+    @synchronized (shared) {
+        if (shared == nil) return shared = [[self alloc] init];
+        return shared;
+    }
 }
 
-// Shared instance provides a sinleton implementation
-+ (instancetype)sharedInstance: (NSString*)configString errorMessage:(__strong NSError**)__strong error {
-    // Check if we already have single instance initialized and we attempt to use a different configString
-    if ((shared != nil) && (initialConfigString != nil)) {
-        if (![initialConfigString isEqualToString:configString]) {
-            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK alreay initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
-            return nil;
+/* Shared instance provides a sinleton implementation
+ *  Note that will allways return a valid object even if underlying SDK initialization fails.
+ *  The attestation should actually return a valid error message if the initialization error code
+ *  is ignored by the end user.
+ */
++ (instancetype)sharedInstance: (NSString*)configString errorMessage:(NSError**)error {
+    @synchronized (shared) {
+        // Check if we already have single instance initialized and we attempt to use a different configString
+        if ((shared != nil) && (initialConfigString != nil)) {
+            if (![initialConfigString isEqualToString:configString]) {
+                *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK alreay initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+                return shared;
+            }
         }
-    }
-    static dispatch_once_t onceToken;
-    /* Initialise Approov SDK only ever once */
-    dispatch_once(&onceToken, ^{
+        // Have we already got a single instance created before?
+        if (shared != nil) return shared;
+        /* Initialise Approov SDK only ever once */
         shared = [[self alloc] init];
-        /* Check we either have short config string or we did read initial config file */
+        /* Check we have short config string */
         if(configString == nil){
             NSLog(@"ApproovURLSession FATAL: Unable to initialize Approov SDK with provided config");
-            shared = nil;
-            return;
+            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:@"Approov SDK can not be initialized with nil" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            return shared;
         }
-        // We need to do this to avoid compiler complaining about retain/release
         NSError* localError = nil;
         [Approov initialize:configString updateConfig:@"auto" comment:nil error:&localError];
         if (localError != nil) {
             NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", localError.localizedDescription);
-            shared = nil;
             *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:localError.localizedDescription ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
-            return;
+            return shared;
         }
         initialConfigString = configString;
-    });
-    return shared;
+
+        return shared;
+    }
 }
 
 
