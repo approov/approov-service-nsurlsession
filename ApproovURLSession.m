@@ -68,7 +68,7 @@ NSURLSession* urlSession;
 NSURLSessionConfiguration* urlSessionConfiguration;
 ApproovURLSessionDelegate* urlSessionDelegate;
 NSOperationQueue* delegateQueue;
-ApproovService* approovSDK;
+ApproovService* approovService;
 
 /*
  *  URLSession initializer
@@ -81,7 +81,7 @@ ApproovService* approovSDK;
     delegateQueue = queue;
     // Set as URLSession delegate our implementation
     urlSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:urlSessionDelegate delegateQueue:delegateQueue];
-    approovSDK = [ApproovService shared];
+    approovService = [ApproovService shared];
     return [[ApproovURLSession alloc] init];
 }
 
@@ -127,7 +127,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // The return object
     NSURLSessionDataTask* sessionDataTask;
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     if (approovData == nil){
         // Approov SDK call failed, go ahead and make the API call with the original request object
         sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
@@ -165,7 +165,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDataTask* sessionDataTask;
     if (approovData == nil){
@@ -233,7 +233,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
     if (approovData == nil){
@@ -273,7 +273,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request
                                     completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
     if (approovData == nil){
@@ -342,7 +342,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -383,7 +383,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
          fromFile:(NSURL *)fileURL
                                 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -433,7 +433,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -472,7 +472,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromData:(NSData *)bodyData {
         NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-        ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+        ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
         // The return object
         NSURLSessionUploadTask* sessionUploadTask;
         if (approovData == nil){
@@ -512,7 +512,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
          fromData:(NSData *)bodyData
                                 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (approovData == nil){
@@ -571,7 +571,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 - (NSURLSessionWebSocketTask *)webSocketTaskWithRequest:(NSURLRequest *)request  API_AVAILABLE(ios(13.0)){
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [approovSDK fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionWebSocketTask* sessionWebSocketTask;
     if (approovData == nil){
@@ -734,7 +734,7 @@ static NSString* initialConfigString = nil;
  */
 
 + (void)prefetch {
-    if (approovSDK != nil){
+    if (shared != nil){
         // We succeeded initializing Approov SDK, fetch a token
         [Approov fetchApproovToken:^(ApproovTokenFetchResult* result) {
             // Prefetch done, no need to process response
