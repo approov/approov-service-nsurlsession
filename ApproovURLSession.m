@@ -128,11 +128,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLSessionDataTask* sessionDataTask;
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
-        return sessionDataTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed:
             // Go ahead and make the API call with the provided request object
@@ -168,14 +163,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDataTask* sessionDataTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionDataTask = [urlSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-            // Invoke completition handler
-            completionHandler(data,response,error);
-        }];
-        return sessionDataTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed: {
             // Go ahead and make the API call with the provided request object
@@ -236,11 +223,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionDownloadTask = [urlSession downloadTaskWithRequest:[approovData getRequest]];
-        return sessionDownloadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed:
             // Go ahead and make the API call with the provided request object
@@ -276,14 +258,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionDownloadTask* sessionDownloadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionDownloadTask = [urlSession downloadTaskWithRequest:[approovData getRequest] completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
-            // Invoke completition handler
-            completionHandler(location,response,error);
-        }];
-        return sessionDownloadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed: {
             // Go ahead and make the API call with the provided request object
@@ -345,11 +319,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionUploadTask = [urlSession uploadTaskWithRequest:[approovData getRequest] fromFile:fileURL];
-        return sessionUploadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed:
             // Go ahead and make the API call with the provided request object
@@ -386,14 +355,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionUploadTask = [urlSession uploadTaskWithRequest:[approovData getRequest] fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            // Invoke completition handler
-            completionHandler(data,response,error);
-        }];
-        return sessionUploadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed: {
             // Go ahead and make the API call with the provided request object
@@ -436,11 +397,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionUploadTask = [urlSession uploadTaskWithStreamedRequest:[approovData getRequest]];
-        return sessionUploadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed:
             // Go ahead and make the API call with the provided request object
@@ -475,11 +431,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
         ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
         // The return object
         NSURLSessionUploadTask* sessionUploadTask;
-        if (approovData == nil){
-            // Approov SDK call failed, go ahead and make the API call with the original request object
-            sessionUploadTask = [urlSession uploadTaskWithRequest:[approovData getRequest] fromData:bodyData];
-            return sessionUploadTask;
-        }
         switch ([approovData getDecision]) {
             case ShouldProceed:
                 // Go ahead and make the API call with the provided request object
@@ -515,14 +466,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionUploadTask = [urlSession uploadTaskWithRequest:[approovData getRequest] fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            // Invoke completition handler
-            completionHandler(data,response,error);
-        }];
-        return sessionUploadTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed: {
             // Go ahead and make the API call with the provided request object
@@ -574,11 +517,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
     // The return object
     NSURLSessionWebSocketTask* sessionWebSocketTask;
-    if (approovData == nil){
-        // Approov SDK call failed, go ahead and make the API call with the original request object
-        sessionWebSocketTask = [urlSession webSocketTaskWithRequest:[approovData getRequest]];
-        return sessionWebSocketTask;
-    }
     switch ([approovData getDecision]) {
         case ShouldProceed:
             // Go ahead and make the API call with the provided request object
