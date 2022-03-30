@@ -24,7 +24,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
     ShouldFail,
 };
 
-/* ApproovSDk token fetch return object */
+/* ApproovSDK token fetch return object */
 @interface ApproovData : NSObject
 @property (getter=getRequest)NSURLRequest* request;
 @property (getter=getDecision)ApproovTokenNetworkFetchDecision decision;
@@ -32,7 +32,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 @property NSError* error;
 @end
 
-/* The ApproovSDK attestation function */
+/* The ApproovService attestation function */
 @interface ApproovService ()
 + (instancetype)shared;
 - (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
@@ -46,7 +46,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 @end
 
 /*
- *  Encapsulates Approov SDk errors, decisions to proceed or not and any user defined headers
+ *  Encapsulates Approov SDK errors, decisions to proceed or not and any user defined headers
  */
 @implementation ApproovData
 
@@ -89,7 +89,6 @@ ApproovService* approovService;
  *  URLSession initializer
  *   see ApproovURLSession.h
  */
-
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration {
     return [ApproovURLSession sessionWithConfiguration:configuration delegate:nil delegateQueue:nil];
 }
@@ -104,7 +103,6 @@ ApproovService* approovService;
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url {
     return [self dataTaskWithRequest:[[NSURLRequest alloc] initWithURL:url]];
 }
@@ -112,7 +110,6 @@ ApproovService* approovService;
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url
 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler
 {
@@ -122,7 +119,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
     // The return object
     NSURLSessionDataTask* sessionDataTask;
@@ -161,7 +157,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
@@ -213,7 +208,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithURL:(NSURL *)url {
     return [self downloadTaskWithRequest:[[NSURLRequest alloc] initWithURL:url]];
 }
@@ -221,7 +215,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithURL:(NSURL *)url
                                 completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
     return [self downloadTaskWithRequest:[[NSURLRequest alloc] initWithURL:url] completionHandler:completionHandler];
@@ -230,7 +223,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
@@ -269,7 +261,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request
                                     completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
@@ -320,7 +311,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*  NOTE: this call is not protected by Approov
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData {
     return [urlSession downloadTaskWithResumeData:resumeData];
 }
@@ -328,7 +318,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*  NOTE: this call is not protected by Approov
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData
                                        completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
     return [urlSession downloadTaskWithResumeData:resumeData completionHandler:completionHandler];
@@ -338,7 +327,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
@@ -378,7 +366,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
          fromFile:(NSURL *)fileURL
                                 completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
@@ -430,7 +417,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 /*
  *   see ApproovURLSession.h
  */
-
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request {
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     ApproovData* approovData = [approovService fetchApproovToken:requestWithHeaders];
@@ -698,7 +684,7 @@ static NSString* initialConfigString = nil;
         // Check if we already have single instance initialized and we attempt to use a different configString
         if ((shared != nil) && (initialConfigString != nil)) {
             if (![initialConfigString isEqualToString:configString]) {
-                *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK alreay initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+                *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK already initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
                 return shared;
             }
         }
@@ -715,7 +701,7 @@ static NSString* initialConfigString = nil;
         NSError* localError = nil;
         [Approov initialize:configString updateConfig:@"auto" comment:nil error:&localError];
         if (localError != nil) {
-            NSLog(@"ApproovURLSession FATAL: Error initilizing Approov SDK: %@", localError.localizedDescription);
+            NSLog(@"ApproovURLSession FATAL: Error initializing Approov SDK: %@", localError.localizedDescription);
             *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:localError.localizedDescription ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return shared;
         }
@@ -732,7 +718,6 @@ static NSString* initialConfigString = nil;
  *  or is awaiting user input. Since the initial network connection is the most
  *  expensive the prefetch seems reasonable.
  */
-
 + (void)prefetch {
     if (shared != nil){
         // We succeeded initializing Approov SDK, fetch a token
@@ -1420,7 +1405,8 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     PUBLIC_KEY_INFORMATION_READ_FAILURE
 };
 
-/*  Evaluates a URLAuthenticationChallenge deciding if to proceed further
+/*  Evaluates a URLAuthenticationChallenge deciding if to proceed further/
+ *
  *  @param  challenge: NSURLAuthenticationChallenge
  *  @return SecTrustRef: valid SecTrust if authentication should proceed, nil otherwise
  */
@@ -1507,7 +1493,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
 }
 
 /*
- * gets a certificate's subject public key info (SPKI)
+ * Gets a certificate's subject public key info (SPKI).
  */
 - (NSData*)publicKeyInfoOfCertificate:(SecCertificateRef)certificate {
     SecKeyRef publicKey = nil;
@@ -1546,7 +1532,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
 }
 
 /*
- * gets the subject public key info (SPKI) header depending on a public key's type and size
+ * Gets the subject public key info (SPKI) header depending on a public key's type and size.
  */
 - (NSData *)publicKeyInfoHeaderForKey:(SecKeyRef)publicKey {
     // get the SPKI header depending on the key's type and size

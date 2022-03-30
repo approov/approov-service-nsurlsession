@@ -139,14 +139,14 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 @end
 
 
-/* The ApproovSDK interface wrapper */
+/* The ApproovService interface wrapper */
 @interface ApproovService : NSObject
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)sharedInstance:(NSString*)configString errorMessage:(NSError**)error;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetch;
-/* The ApproovSDK error enum status codes mapped to a NSString */
+/* The underlying Approov SDK error enum status codes mapped to a NSString */
 + (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
 - (NSString*)getApproovTokenHeader;
 - (void)setApproovTokenHeader:(NSString*)newHeader;
