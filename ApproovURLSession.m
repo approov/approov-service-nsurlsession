@@ -603,7 +603,7 @@ static NSString* ApproovSDKARCKey = @"ARC";
 static NSString* RetryLastOperationKey = @"RetryLastOperation";
 // The singleton object
 static ApproovService *shared = nil;
-// The original config string used during intialization
+// The original config string used during initialization
 static NSString* initialConfigString = nil;
 
 // Shared default instance
@@ -769,8 +769,10 @@ static NSString* initialConfigString = nil;
  * new value is returned as the secure string. Use of an empty string for newDef removes
  * the string entry. Note that this call may require network transaction and thus may block
  * for some time, so should not be called from the UI thread. If the attestation fails
- * for any reason then nil is returned. Note that the returned string
- * should NEVER be cached by your app, you should call this function when it is needed.
+ * for any reason then nil is returned. Note that the returned string should NEVER be cached
+ * by your app, you should call this function when it is needed. If the fetch fails for any reason
+ * and the error paramether is not nil, the ApproovServiceError, RejectionReasons and canRetry will
+ * be populated.
  *
  * @param key is the secure string key to be looked up
  * @param newDef is any new definition for the secure string, or nil for lookup only
@@ -820,9 +822,8 @@ static NSString* initialConfigString = nil;
 /*
  * Fetches a custom JWT with the given payload. Note that this call will require network
  * transaction and thus will block for some time, so should not be called from the UI thread.
- * If the attestation fails for any reason and the NSError paramether is not nil, the  ApproovSDKError
- * and the ApproovSDKRejectionReasons will be populated to contain the underlying Approov SDK error
- * messages.
+ * If the fetch fails for any reason and the error paramether is not nil, the ApproovServiceError,
+ * RejectionReasons and canRetry will be populated.
  *
  * @param payload is the marshaled JSON object for the claims to be included
  * @param error is a pointer to a NSError type containing optional error message
@@ -848,7 +849,7 @@ static NSString* initialConfigString = nil;
         // if the request is rejected then we provide a special exception with additional information
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT rejected"];
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
         }
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
@@ -856,13 +857,13 @@ static NSString* initialConfigString = nil;
                (approovResult.status == ApproovTokenFetchStatusMITMDetected)) {
         // we are unable to get the JWT due to network conditions so the request can
         // be retried by the user later
-        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT Network error, retry needed."];
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT network error, retry needed."];
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:YES];
+            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:YES];
         }
         return nil;
     } else if (approovResult.status != ApproovTokenFetchStatusSuccess) {
-        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT Failure during attestation."];
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT permanent error"];
         [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
         if (error != nil){
             *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:NO];
@@ -915,7 +916,7 @@ static NSString* initialConfigString = nil;
         case ApproovTokenFetchStatusMITMDetected: {
             // Must not proceed with network request and inform user a retry is needed
             returnData.decision = ShouldRetry;
-            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Network issue, retry later." ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil  canRetry:YES];
+            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Network issue, retry later." ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
             returnData.error = error;
             break;
         }
@@ -1002,10 +1003,10 @@ static NSString* initialConfigString = nil;
     NSLocalizedDescriptionKey: NSLocalizedString(message, nil),
     NSLocalizedFailureReasonErrorKey: NSLocalizedString(message, nil),
     NSLocalizedRecoverySuggestionErrorKey: NSLocalizedString(message, nil),
-    ApproovSDKErrorKey: NSLocalizedString(sdkError,nil),
-    ApproovSDKRejectionReasonsKey: NSLocalizedString(rejectionReasons,nil),
-    ApproovSDKARCKey: NSLocalizedString(arc,nil),
-    RetryLastOperationKey: NSLocalizedString(retry ? @"YES" : @"NO",nil)
+    ApproovSDKErrorKey: NSLocalizedString(sdkError, nil),
+    ApproovSDKRejectionReasonsKey: NSLocalizedString(rejectionReasons, nil),
+    ApproovSDKARCKey: NSLocalizedString(arc, nil),
+    RetryLastOperationKey: NSLocalizedString(retry ? @"YES" : @"NO", nil)
                             };
     NSError* error = [[NSError alloc] initWithDomain:@"io.approov.ApproovURLSession" code:code userInfo:userInfo];
     return error;
