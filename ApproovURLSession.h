@@ -146,8 +146,6 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetch;
-/* The underlying Approov SDK error enum status codes mapped to a NSString */
-+ (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
 - (NSString*)getApproovTokenHeader;
 - (void)setApproovTokenHeader:(NSString*)newHeader;
 - (NSString*)getApproovTokenPrefix;
