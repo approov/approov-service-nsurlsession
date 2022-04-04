@@ -610,6 +610,8 @@ static NSString* initialConfigString = nil;
 // Shared default instance
 + (ApproovService*)shared {
     @synchronized (shared) {
+        // Initialize headers map
+        if (substitutionHeaders == nil) substitutionHeaders = [[NSMutableDictionary alloc] init];
         if (shared == nil) return shared = [[self alloc] init];
         return shared;
     }
@@ -622,6 +624,8 @@ static NSString* initialConfigString = nil;
  */
 + (void)initialize: (NSString*)configString errorMessage:(NSError**)error {
     @synchronized (shared) {
+        // Initialize headers map
+        if (substitutionHeaders == nil) substitutionHeaders = [[NSMutableDictionary alloc] init];
         // Check if we already have single instance initialized and we attempt to use a different configString
         if ((shared != nil) && (initialConfigString != nil)) {
             if (![initialConfigString isEqualToString:configString]) {
