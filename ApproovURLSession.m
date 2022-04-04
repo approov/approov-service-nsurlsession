@@ -83,6 +83,7 @@ ApproovService* approovService;
     delegateQueue = queue;
     // Set as URLSession delegate our implementation
     urlSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:urlSessionDelegate delegateQueue:delegateQueue];
+    // Get the initialized shared instance of ApproovService
     approovService = [ApproovService shared];
     return [[ApproovURLSession alloc] init];
 }
@@ -619,7 +620,7 @@ static NSString* initialConfigString = nil;
  *  The attestation should actually return a valid error message if the initialization error code
  *  is ignored by the end user.
  */
-+ (void)init: (NSString*)configString errorMessage:(NSError**)error {
++ (void)initialize: (NSString*)configString errorMessage:(NSError**)error {
     @synchronized (shared) {
         // Check if we already have single instance initialized and we attempt to use a different configString
         if ((shared != nil) && (initialConfigString != nil)) {
