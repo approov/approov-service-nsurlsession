@@ -629,7 +629,10 @@ static NSString* initialConfigString = nil;
         // Check if we already have single instance initialized and we attempt to use a different configString
         if ((shared != nil) && (initialConfigString != nil)) {
             if (![initialConfigString isEqualToString:configString]) {
-                *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError userMessage:@"Approov SDK already initialized with different configuration" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+                *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusInternalError
+                    userMessage:@"Approov SDK already initialized with different configuration"
+                    ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusInternalError]
+                    ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
                 return;
             }
         }
@@ -639,16 +642,22 @@ static NSString* initialConfigString = nil;
         shared = [[self alloc] init];
         /* Check we have short config string */
         if(configString == nil){
-            NSLog(@"ApproovURLSession FATAL: Unable to initialize Approov SDK with provided config");
-            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:@"Approov SDK can not be initialized with nil" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            NSLog(@"ApproovURLSession: Unable to initialize Approov SDK with provided config");
+            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized
+                userMessage:@"Approov SDK can not be initialized with nil"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return;
         }
         NSError* localError = nil;
         [Approov initialize:configString updateConfig:@"auto" comment:nil error:&localError];
-        [Approov setUserProperty:@"QuickstartIosObjectiveC"];
+        [Approov setUserProperty:@"approov-service-nsurlsession"];
         if (localError != nil) {
-            NSLog(@"ApproovURLSession FATAL: Error initializing Approov SDK: %@", localError.localizedDescription);
-            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized userMessage:localError.localizedDescription ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            NSLog(@"ApproovURLSession: Error initializing Approov SDK: %@", localError.localizedDescription);
+            *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusNotInitialized
+                userMessage:localError.localizedDescription
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:ApproovTokenFetchStatusNotInitialized]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return;
         }
         initialConfigString = configString;
@@ -791,20 +800,28 @@ static NSString* initialConfigString = nil;
     // fetch any secure string keyed by the value, catching any exceptions the SDK might throw
     ApproovTokenFetchResult* approovResult = [Approov fetchSecureStringAndWait:key :newDef];
     // Log result of token fetch operation but do not log the value
-    NSLog(@"ApproovURLSession: fetchSecureString %@ : %@", type, [ApproovService stringFromApproovTokenFetchStatus:approovResult.status]);
+    NSLog(@"ApproovURLSession: fetchSecureString %@: %@", type, [ApproovService stringFromApproovTokenFetchStatus:approovResult.status]);
     // Process the returned Approov status
     if (approovResult.status == ApproovTokenFetchStatusDisabled) {
-        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Secure String feature must be enabled using CLI" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+        *error = [ApproovService createErrorWithCode:approovResult.status
+            userMessage:@"Secure String feature must be enabled using CLI"
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+            ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusBadKey) {
         if (error != nil) {
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"fetchSecureString Bad/Missing key" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status
+                userMessage:@"fetchSecureString bad key"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         }
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString rejected"];
-        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+        *error = [ApproovService createErrorWithCode:approovResult.status
+            userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+            ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
                (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -812,12 +829,16 @@ static NSString* initialConfigString = nil;
         // we are unable to get the secure string due to network conditions so the request can
         // be retried by the user later
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString network error, retry needed."];
-        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:YES];
+        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+            ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
         return nil;
     } else if ((approovResult.status != ApproovTokenFetchStatusSuccess) && (approovResult.status != ApproovTokenFetchStatusUnknownKey)) {
         // we are unable to get the secure string due to a more permanent error
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString permanent error"];
-        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+        *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+            ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     }
     return approovResult.secureString;
@@ -841,19 +862,27 @@ static NSString* initialConfigString = nil;
     // process the returned Approov status
     if (approovResult.status == ApproovTokenFetchStatusBadPayload) {
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: Malformed JSON" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status
+                userMessage:@"fetchCustomJWT: Malformed payload JSON"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         }
         return nil;
     } else if(approovResult.status == ApproovTokenFetchStatusDisabled){
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"fetchCustomJWT: This feature must be enabled using CLI" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status
+                userMessage:@"fetchCustomJWT: This feature must be enabled using CLI"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         }
         return nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT rejected"];
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
         }
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
@@ -861,20 +890,23 @@ static NSString* initialConfigString = nil;
                (approovResult.status == ApproovTokenFetchStatusMITMDetected)) {
         // we are unable to get the JWT due to network conditions so the request can
         // be retried by the user later
-        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT network error, retry needed."];
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT network error, retry needed"];
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:YES];
+            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
         }
         return nil;
     } else if (approovResult.status != ApproovTokenFetchStatusSuccess) {
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT permanent error"];
         [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
         if (error != nil){
-            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:NO];
+            *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         }
         return nil;
     }
-    
     return approovResult.token;
 }
 
@@ -901,7 +933,7 @@ static NSString* initialConfigString = nil;
     // Invoke fetch token sync
     ApproovTokenFetchResult* approovResult = [Approov fetchApproovTokenAndWait:request.URL.absoluteString];
     // Log result of token fetch
-    NSLog(@"ApproovURLSession: Host: %@ : %@", request.URL.host, approovResult.loggableToken);
+    NSLog(@"ApproovURLSession: fetchApproovToken for %@: %@", request.URL.host, approovResult.loggableToken);
     // Update the message
     returnData.sdkMessage = [Approov stringFromApproovTokenFetchStatus:approovResult.status];
 
@@ -920,7 +952,9 @@ static NSString* initialConfigString = nil;
         case ApproovTokenFetchStatusMITMDetected: {
             // Must not proceed with network request and inform user a retry is needed
             returnData.decision = ShouldRetry;
-            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Network issue, retry later." ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
+            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Network issue, retry later"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
             returnData.error = error;
             break;
         }
@@ -933,7 +967,9 @@ static NSString* initialConfigString = nil;
         }
         default: {
             returnData.decision = ShouldFail;
-            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Unknown SDK error" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Permanent error"
+                ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             returnData.error = error;
             break;
         }
@@ -957,19 +993,24 @@ static NSString* initialConfigString = nil;
                 if (isIllegalSubstitution){
                     // don't allow substitutions on unadded API domains to prevent them accidentally being
                     // subject to a Man-in-the-Middle (MitM) attack
-                    NSString* message = [NSString stringWithFormat:@"Header substitution for %@ illegal for %@ that is not an added API domain",header, newRequest.URL];
-                    NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusSuccess userMessage:message ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+                    NSString* message = [NSString stringWithFormat:@"Header substitution for %@ illegal for %@ that is not an added API domain",
+                        header, newRequest.URL];
+                    NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusSuccess userMessage:message
+                        ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                        ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
                     returnData.error = error;
                     break;
                 }
                 // We add the modified header to the new copy of request
-                [newRequest setValue:[NSString stringWithFormat:@"%@%@",prefix,approovResult.secureString] forHTTPHeaderField: header];
+                [newRequest setValue:[NSString stringWithFormat:@"%@%@", prefix, approovResult.secureString] forHTTPHeaderField: header];
             } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
                 // if the request is rejected then we provide a special exception with additional information
                 NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
                 [details appendString:[NSString stringWithFormat:@" %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]]];
-                [details appendString:[NSString stringWithFormat:@" %@  %@",approovResult.ARC,approovResult.rejectionReasons]];
-                NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusRejected userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+                [details appendString:[NSString stringWithFormat:@" %@ %@", approovResult.ARC, approovResult.rejectionReasons]];
+                NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
+                    ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                    ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
                 returnData.error = error;
                 break;
             } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
@@ -979,14 +1020,18 @@ static NSString* initialConfigString = nil;
                 // be retried by the user later
                 NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
                 [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
-                NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusRejected userMessage:@"Network issue, retry later." ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:nil ApproovSDKARC:nil  canRetry:YES];
+                NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Network issue, retry later"
+                    ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                    ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
                 returnData.error = error;
                 break;
             } else if (approovResult.status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
                 [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResult.status]];
-                NSError *error = [ApproovService createErrorWithCode:ApproovTokenFetchStatusRejected userMessage:@"permanent error" ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status] ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC  canRetry:NO];
+                NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:@"Permanent error"
+                    ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
+                    ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
                 returnData.error = error;
                 break;
             }
@@ -1360,7 +1405,8 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
     if(!serverTrust) {
         // Set error message and return
-        *error = [ApproovService createErrorWithCode:NOT_SERVER_TRUST userMessage:@"FATAL: ApproovURLSession not a server trust" ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil  canRetry:NO];
+        *error = [ApproovService createErrorWithCode:NOT_SERVER_TRUST userMessage:@"ApproovURLSession not a server trust"
+            ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     }
     // check the validity of the server cert
@@ -1368,11 +1414,15 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     OSStatus status = SecTrustEvaluate(serverTrust, &result);
     if(status != errSecSuccess){
         // Set error message and return
-        *error = [ApproovService createErrorWithCode:SERVER_CERTIFICATE_FAILED_VALIDATION userMessage:@"FATAL: ApproovURLSession: server certificate validation failed" ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+        *error = [ApproovService createErrorWithCode:SERVER_CERTIFICATE_FAILED_VALIDATION
+            userMessage:@"ApproovURLSession: server certificate validation failed"
+            ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     } else if((result != kSecTrustResultUnspecified) && (result != kSecTrustResultProceed)){
         // Set error message and return
-        *error = [ApproovService createErrorWithCode:SERVER_TRUST_EVALUATION_FAILURE userMessage:@"FATAL: ApproovURLSession: server trust evaluation failed" ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+        *error = [ApproovService createErrorWithCode:SERVER_TRUST_EVALUATION_FAILURE
+            userMessage:@"ApproovURLSession: server trust evaluation failed"
+            ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     }
     NSDictionary* pins = [Approov getPins:@"public-key-sha256"];
@@ -1388,14 +1438,18 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
         SecCertificateRef serverCert = SecTrustGetCertificateAtIndex(serverTrust, indexCurrentCert);
         if(serverCert == nil) {
             // Set error message and return
-            *error = [ApproovService createErrorWithCode:CERTIFICATE_CHAIN_READ_ERROR userMessage:@"FATAL: ApproovURLSession: failed to read certificate from chain" ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            *error = [ApproovService createErrorWithCode:CERTIFICATE_CHAIN_READ_ERROR
+                userMessage:@"ApproovURLSession: failed to read certificate from chain"
+                ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return nil;
         }
         // get the subject public key info from the certificate
         NSData* publicKeyInfo = [self publicKeyInfoOfCertificate:serverCert];
         if(publicKeyInfo == nil){
             // Set error message and return
-            *error = [ApproovService createErrorWithCode:PUBLIC_KEY_INFORMATION_READ_FAILURE userMessage:@"FATAL: ApproovURLSession: failed reading public key information" ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+            *error = [ApproovService createErrorWithCode:PUBLIC_KEY_INFORMATION_READ_FAILURE
+                userMessage:@"ApproovURLSession: failed reading public key information"
+                ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             return nil;
         }
         
