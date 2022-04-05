@@ -617,10 +617,12 @@ static NSString* initialConfigString = nil;
     }
 }
 
-/*  Initializes the ApproovService
- *  Note that will allways return a valid object even if underlying SDK initialization fails.
- *  The attestation should actually return a valid error message if the initialization error code
- *  is ignored by the end user.
+/*
+ * Initializes the ApproovService with the provided configuration string. The call is ignored if the
+ * ApproovService has already been initialized with the same configuration string.
+ * 
+ * @param configString is the string to be used for initialization
+ * @param error is populated with an error if there was a problem during initialization, or nil if not required
  */
 + (void)initialize: (NSString*)configString errorMessage:(NSError**)error {
     @synchronized (shared) {
