@@ -24,15 +24,15 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
     ShouldFail,
 };
 
-/* ApproovSDK token fetch return object */
-@interface ApproovData : NSObject
+/* Approov SDK token fetch return object */
+@interface ApproovData: NSObject
 @property (getter=getRequest)NSURLRequest* request;
 @property (getter=getDecision)ApproovTokenNetworkFetchDecision decision;
 @property (getter=getSdkMessage)NSString* sdkMessage;
 @property NSError* error;
 @end
 
-/* The ApproovService attestation function */
+/* The ApproovService attestation functions */
 @interface ApproovService ()
 + (ApproovService*)shared;
 - (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
@@ -748,21 +748,20 @@ static NSString* initialConfigString = nil;
  * Adds the name of a header which should be subject to secure strings substitution. This
  * means that if the header is present then the value will be used as a key to look up a
  * secure string value which will be substituted into the header value instead. This allows
- * easy migration to the use of secure strings. A required
- * prefix may be specified to deal with cases such as the use of "Bearer " prefixed before values
- * in an authorization header.
+ * easy migration to the use of secure strings. A required prefix may be specified to deal
+ * with cases such as the use of "Bearer " prefixed before values in an authorization header.
  *
  * @param header is the header to be marked for substitution
  * @param requiredPrefix is any required prefix to the value being substituted or nil if not required
  */
-- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix {
-    if (prefix == nil) {
+- (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)requiredPrefix {
+    if (requiredPrefix == nil) {
         @synchronized(substitutionHeaders){
             [substitutionHeaders setValue:@"" forKey:header];
         }
     } else {
         @synchronized(substitutionHeaders){
-            [substitutionHeaders setValue:prefix forKey:header];
+            [substitutionHeaders setValue:requiredPrefix forKey:header];
         }
     }
 }
@@ -1534,8 +1533,3 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
 }
 
 @end
-
-
-
-
-
