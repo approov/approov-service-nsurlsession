@@ -154,6 +154,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 + (void)removeSubstitutionHeader:(NSString*)header;
 + (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
 + (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
++ (void)precheck:(NSError**)error;
 @end
 
 

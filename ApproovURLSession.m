@@ -807,9 +807,12 @@ static NSString* initialConfigString = nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString* details = [[NSMutableString alloc] initWithString:@"fetchSecureString rejected"];
+        // Find out if user has enabled rejection reasons and arc features
+        BOOL rejectionReasonsEnabled = (approovResult.rejectionReasons != nil);
+        BOOL arcEnabled = (approovResult.ARC != nil);
         *error = [ApproovService createErrorWithCode:approovResult.status
             userMessage:details ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
-            ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+                          ApproovSDKRejectionReasons:rejectionReasonsEnabled?approovResult.rejectionReasons:nil ApproovSDKARC:arcEnabled?approovResult.ARC:nil canRetry:NO];
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
                (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -863,9 +866,12 @@ static NSString* initialConfigString = nil;
     } else if (approovResult.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSMutableString* details = [[NSMutableString alloc] initWithString:@"fetchCustomJWT rejected"];
+        // Find out if user has enabled rejection reasons and arc features
+        BOOL rejectionReasonsEnabled = (approovResult.rejectionReasons != nil);
+        BOOL arcEnabled = (approovResult.ARC != nil);
             *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
                 ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
-                ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+                              ApproovSDKRejectionReasons:rejectionReasonsEnabled?approovResult.rejectionReasons:nil ApproovSDKARC:arcEnabled?approovResult.ARC:nil canRetry:NO];
         return nil;
     } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
                (approovResult.status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -985,11 +991,14 @@ static NSString* initialConfigString = nil;
                 // if the request is rejected then we provide a special exception with additional information
                 NSMutableString* details = [[NSMutableString alloc] initWithString:@"Header substitution "];
                 [details appendString:[NSString stringWithFormat:@" %@", [Approov stringFromApproovTokenFetchStatus:approovResult.status]]];
-                if (approovResult.ARC != nil) [details appendString:[NSString stringWithFormat:@" %@", approovResult.ARC]];
-                if (approovResult.rejectionReasons != nil) [details appendString:[NSString stringWithFormat:@" %@", approovResult.rejectionReasons]];
+                // Find out if user has enabled rejection reasons and arc features
+                BOOL rejectionReasonsEnabled = (approovResult.rejectionReasons != nil);
+                BOOL arcEnabled = (approovResult.ARC != nil);
+                if (arcEnabled) [details appendString:[NSString stringWithFormat:@" %@", approovResult.ARC]];
+                if (rejectionReasonsEnabled) [details appendString:[NSString stringWithFormat:@" %@", approovResult.rejectionReasons]];
                 NSError *error = [ApproovService createErrorWithCode:approovResult.status userMessage:details
                     ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
-                    ApproovSDKRejectionReasons:approovResult.rejectionReasons ApproovSDKARC:approovResult.ARC canRetry:NO];
+                                          ApproovSDKRejectionReasons:rejectionReasonsEnabled?approovResult.rejectionReasons:nil ApproovSDKARC:arcEnabled?approovResult.ARC:nil canRetry:NO];
                 returnData.error = error;
                 break;
             } else if ((approovResult.status == ApproovTokenFetchStatusNoNetwork) ||
@@ -1021,21 +1030,64 @@ static NSString* initialConfigString = nil;
     return returnData;
 }
 
+/* Performs a precheck to determine if the app will pass attestation. This requires secure
+* strings to be enabled for the account, although no strings need to be set up. This will
+* likely require network access so may take some time to complete. It may return an error
+* if the precheck fails or if there is some other problem. ApproovTokenFetchStatusRejected is
+* an error returnedif the app has failed Approov checks or ApproovTokenFetchStatusNoNetwork for networking
+* issues where a user initiated retry of the operation should be allowed. An ApproovTokenFetchStatusRejected
+* may provide additional information about the cause of the rejection.
+*/
++(void)precheck:(NSError**)error {
+    // try to fetch a non-existent secure string in order to check for a rejection
+    ApproovTokenFetchResult *approovResults = [Approov fetchSecureStringAndWait:@"precheck-dummy-key" :nil];
+    // process the returned Approov status
+    if (approovResults.status == ApproovTokenFetchStatusRejected){
+        // if the request is rejected then we provide a special exception with additional information
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"precheck "];
+        [details appendString:[NSString stringWithFormat:@" %@", [Approov stringFromApproovTokenFetchStatus:approovResults.status]]];
+        // Find out if user has enabled rejection reasons and arc features
+        BOOL rejectionReasonsEnabled = (approovResults.rejectionReasons != nil);
+        BOOL arcEnabled = (approovResults.ARC != nil);
+        if (arcEnabled) [details appendString:[NSString stringWithFormat:@" %@", approovResults.ARC]];
+        if (rejectionReasonsEnabled) [details appendString:[NSString stringWithFormat:@" %@", approovResults.rejectionReasons]];
+        *error = [ApproovService createErrorWithCode:approovResults.status userMessage:details
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResults.status]
+                                  ApproovSDKRejectionReasons:rejectionReasonsEnabled?approovResults.rejectionReasons:nil ApproovSDKARC:arcEnabled?approovResults.ARC:nil canRetry:NO];
+    } else if ((approovResults.status == ApproovTokenFetchStatusNoNetwork) ||
+               (approovResults.status == ApproovTokenFetchStatusPoorNetwork) ||
+               (approovResults.status == ApproovTokenFetchStatusMITMDetected)) {
+        // we are unable to get the secure string due to network conditions so the request can
+        // be retried by the user later
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"precheck "];
+        [details appendString:[Approov stringFromApproovTokenFetchStatus:approovResults.status]];
+        *error = [ApproovService createErrorWithCode:approovResults.status userMessage:@"Network issue, retry later"
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResults.status]
+            ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
+    } else if ((approovResults.status != ApproovTokenFetchStatusSuccess) && (approovResults.status != ApproovTokenFetchStatusUnknownKey)) {
+        // we are unable to get the secure string due to a more permanent error
+        NSMutableString* details = [[NSMutableString alloc] initWithString:@"prefetch permanent error"];
+        *error = [ApproovService createErrorWithCode:approovResults.status userMessage:details
+            ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResults.status]
+            ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+    }
+}
+
 /* Create an error message filling in Approov SDK error codes and optional Approov SDK device information/failure reason
  *  Also shows if an additional attempt to repeat the last operation might be possible by setting the RetryLastOperationKey
  *  key to "YES"
  */
 + (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
      ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry {
-    NSDictionary *userInfo = @{
-    NSLocalizedDescriptionKey: NSLocalizedString(message, nil),
-    NSLocalizedFailureReasonErrorKey: NSLocalizedString(message, nil),
-    NSLocalizedRecoverySuggestionErrorKey: NSLocalizedString(message, nil),
-    ApproovSDKErrorKey: NSLocalizedString(sdkError, nil),
-    ApproovSDKRejectionReasonsKey: NSLocalizedString(rejectionReasons, nil),
-    ApproovSDKARCKey: NSLocalizedString(arc, nil),
-    RetryLastOperationKey: NSLocalizedString(retry ? @"YES" : @"NO", nil)
-                            };
+    // Prepare default set of error codes (check nil values and ignore if those are nil)
+    NSMutableDictionary *userInfo = [[NSMutableDictionary alloc]init];
+    [userInfo setValue:NSLocalizedString(message, nil) forKey:NSLocalizedDescriptionKey];
+    [userInfo setValue:NSLocalizedString(message, nil) forKey:NSLocalizedFailureReasonErrorKey];
+    [userInfo setValue:NSLocalizedString(message, nil) forKey:NSLocalizedRecoverySuggestionErrorKey];
+    [userInfo setValue: NSLocalizedString(sdkError, nil) forKey:ApproovSDKErrorKey];
+    if(rejectionReasons != nil) [userInfo setValue:NSLocalizedString(rejectionReasons, nil) forKey:ApproovSDKRejectionReasonsKey];
+    if(arc != nil) [userInfo setValue:NSLocalizedString(arc, nil) forKey:ApproovSDKARCKey];
+    [userInfo setValue:NSLocalizedString(retry ? @"YES" : @"NO", nil) forKey:RetryLastOperationKey];
     NSError* error = [[NSError alloc] initWithDomain:@"io.approov.ApproovURLSession" code:code userInfo:userInfo];
     return error;
 }
