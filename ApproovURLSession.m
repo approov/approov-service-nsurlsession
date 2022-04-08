@@ -1087,7 +1087,7 @@ static NSString* initialConfigString = nil;
     [userInfo setValue: NSLocalizedString(sdkError, nil) forKey:ApproovSDKErrorKey];
     if(rejectionReasons != nil) [userInfo setValue:NSLocalizedString(rejectionReasons, nil) forKey:ApproovSDKRejectionReasonsKey];
     if(arc != nil) [userInfo setValue:NSLocalizedString(arc, nil) forKey:ApproovSDKARCKey];
-    [userInfo setValue:NSLocalizedString(retry ? @"YES" : @"NO", nil) forKey:RetryLastOperationKey];
+    if (retry) [userInfo setValue:NSLocalizedString(@"YES", nil) forKey:RetryLastOperationKey];
     NSError* error = [[NSError alloc] initWithDomain:@"io.approov.ApproovURLSession" code:code userInfo:userInfo];
     return error;
 }
