@@ -940,7 +940,7 @@ static NSString* initialConfigString = nil;
                 ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
                 ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:YES];
             returnData.error = error;
-            break;
+            return returnData;
         }
         case ApproovTokenFetchStatusUnprotectedURL:
         case ApproovTokenFetchStatusUnknownURL:
@@ -955,7 +955,7 @@ static NSString* initialConfigString = nil;
                 ApproovSDKError:[ApproovService stringFromApproovTokenFetchStatus:approovResult.status]
                 ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
             returnData.error = error;
-            break;
+            return returnData;
         }
     }
     
@@ -970,7 +970,8 @@ static NSString* initialConfigString = nil;
         NSString* prefix = [substitutionHeaders objectForKey:key];
         NSString* value = [allHeaders objectForKey:header];
         // Check if the request contains the header we want to replace
-        if ((value != nil) && ([value hasPrefix:prefix]) && (value.length > prefix.length)){
+        BOOL valueHasPrefixNotNil = (prefix != nil) && (prefix.length >= 0);
+        if ((valueHasPrefixNotNil) && (value.length > prefix.length)){
             approovResult = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
             NSLog(@"Substituting header: %@, %@", header, [Approov stringFromApproovTokenFetchStatus:approovResult.status]);
             if (approovResult.status == ApproovTokenFetchStatusSuccess) {
