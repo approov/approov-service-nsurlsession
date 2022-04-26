@@ -69,6 +69,8 @@ NSURLSession* urlSession;
 NSURLSessionConfiguration* urlSessionConfiguration;
 ApproovURLSessionDelegate* urlSessionDelegate;
 NSOperationQueue* delegateQueue;
+// The operational queue
+dispatch_queue_t approovServiceQueue;
 
 /*
  *  URLSession initializer
@@ -76,6 +78,8 @@ NSOperationQueue* delegateQueue;
  */
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration
                                       delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue {
+    // Dispatch queue creation
+    if (approovServiceQueue == nil) { approovServiceQueue = dispatch_queue_create("approov-service-network-queue", DISPATCH_QUEUE_CONCURRENT);}
     urlSessionConfiguration = configuration;
     urlSessionDelegate = [[ApproovURLSessionDelegate alloc] initWithDelegate:delegate];
     delegateQueue = queue;
@@ -119,32 +123,35 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  *   see ApproovURLSession.h
  */
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
-    // The return object
-    NSURLSessionDataTask* sessionDataTask;
-    NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [ApproovService fetchApproovToken:requestWithHeaders];
-    switch ([approovData getDecision]) {
-        case ShouldProceed:
-            // Go ahead and make the API call with the provided request object
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
-            break;
-        case ShouldRetry:
-            // We create a task and cancel it immediately
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
-            [sessionDataTask cancel];
-            // We should retry doing a fetch after a user driven event
-            // Tell the delagate we are marking the session as invalid
-            [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[approovData error]];
-            break;
-        default:
-            // We create a task and cancel it immediately
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
-            [sessionDataTask cancel];
-            // We should retry doing a fetch after a user driven event
-            // Tell the delagate we are marking the session as invalid
-            [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[approovData error]];
-            break;
-    }
+    
+    __block NSURLSessionDataTask* sessionDataTask;
+    
+    dispatch_async(approovServiceQueue, ^(void){
+       NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
+       ApproovData* approovData = [ApproovService fetchApproovToken:requestWithHeaders];
+           switch ([approovData getDecision]) {
+               case ShouldProceed:
+                   // Go ahead and make the API call with the provided request object
+                   sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
+                   break;
+               case ShouldRetry:
+                   // We create a task and cancel it immediately
+                   sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
+                   [sessionDataTask cancel];
+                   // We should retry doing a fetch after a user driven event
+                   // Tell the delagate we are marking the session as invalid
+                   [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[approovData error]];
+                   break;
+               default:
+                   // We create a task and cancel it immediately
+                   sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest]];
+                   [sessionDataTask cancel];
+                   // We should retry doing a fetch after a user driven event
+                   // Tell the delagate we are marking the session as invalid
+                   [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[approovData error]];
+                   break;
+           }
+        });
     return sessionDataTask;
 }
 
@@ -153,40 +160,42 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  */
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    ApproovData* approovData = [ApproovService fetchApproovToken:requestWithHeaders];
     // The return object
-    NSURLSessionDataTask* sessionDataTask;
-    switch ([approovData getDecision]) {
-        case ShouldProceed: {
-            // Go ahead and make the API call with the provided request object
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+    __block NSURLSessionDataTask* sessionDataTask;
+    dispatch_async(approovServiceQueue, ^(void){
+        NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
+        ApproovData* approovData = [ApproovService fetchApproovToken:requestWithHeaders];
+        switch ([approovData getDecision]) {
+            case ShouldProceed: {
+                // Go ahead and make the API call with the provided request object
+                sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+                    // Invoke completition handler
+                    completionHandler(data,response,error);
+                }];
+                break;
+            }
+            case ShouldRetry: {
                 // Invoke completition handler
-                completionHandler(data,response,error);
-            }];
-            break;
+                completionHandler(nil,nil,[approovData error]);
+                // We create a task and cancel it immediately
+                sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+                }];
+                // We cancel the connection and return the task object at end of function
+                [sessionDataTask cancel];
+                break;
+            }
+            default: {
+                // Invoke completition handler
+                completionHandler(nil,nil,[approovData error]);
+                // We create a task and cancel it immediately
+                sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+                }];
+                // We cancel the connection and return the task object at end of function
+                [sessionDataTask cancel];
+                break;
+            }
         }
-        case ShouldRetry: {
-            // Invoke completition handler
-            completionHandler(nil,nil,[approovData error]);
-            // We create a task and cancel it immediately
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-            }];
-            // We cancel the connection and return the task object at end of function
-            [sessionDataTask cancel];
-            break;
-        }
-        default: {
-            // Invoke completition handler
-            completionHandler(nil,nil,[approovData error]);
-            // We create a task and cancel it immediately
-            sessionDataTask = [urlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-            }];
-            // We cancel the connection and return the task object at end of function
-            [sessionDataTask cancel];
-            break;
-        }
-    }
+    });
     return sessionDataTask;
 }
 
