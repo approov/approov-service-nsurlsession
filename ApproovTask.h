@@ -10,24 +10,33 @@
 #define Protocol_h
 
 @interface ApproovTask : NSURLSessionTask
--(instancetype)initWithSession:(NSURLSession *)session configuration:(NSURLSessionConfiguration*)configuration;
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1411554-datataskwithurl?language=objc
-*/
-- (void)dataTaskWithURL:(NSURL *)url;
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1410330-datataskwithurl?language=objc
-*/
-- (void)dataTaskWithURL:(NSURL *)url
-                        completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1410592-datataskwithrequest?language=objc
-*/
+-(instancetype)initWithSession:(NSURLSession *)session configuration:(NSURLSessionConfiguration*)configuration delegate:(id<NSURLSessionDelegate>)delegate;
+
+//**** DataTask
 - (void)dataTaskWithRequest:(NSURLRequest *)request;
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1407613-datataskwithrequest?language=objc
-*/
+
 - (void)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
+
+//*** DownloadTask
+- (void)downloadTaskWithRequest:(NSURLRequest *)request;
+- (void)downloadTaskWithRequest:(NSURLRequest *)request
+completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler;
+
+//*** UploadTask
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+fromFile:(NSURL *)fileURL;
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+         fromFile:(NSURL *)fileURL
+completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
+- (void)uploadTaskWithStreamedRequest:(NSURLRequest *)request;
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+fromData:(NSData *)bodyData;
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+         fromData:(NSData *)bodyData
+completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
+
+//*** WebSocketTask
+- (void)webSocketTaskWithRequest:(NSURLRequest *)request  API_AVAILABLE(ios(13.0));
 @end
 #endif /* Protocol_h */

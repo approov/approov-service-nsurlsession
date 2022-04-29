@@ -27,8 +27,6 @@
 
 /* The ApproovService attestation functions */
 @interface ApproovService ()
-+ (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
-     ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry;
 /* The underlying Approov SDK error enum status codes mapped to a NSString */
 + (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
 @end

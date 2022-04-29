@@ -18,47 +18,33 @@
 
 NSURLSession* aUrlSession;
 NSURLSessionConfiguration* aUrlSessionConfiguration;
+id<NSURLSessionDelegate> approovTaskSessionDelegate;
 
--(instancetype)initWithSession:(NSURLSession *)session configuration:(NSURLSessionConfiguration*)configuration {
+-(instancetype)initWithSession:(NSURLSession *)session configuration:(NSURLSessionConfiguration*)configuration delegate:(id<NSURLSessionDelegate>)delegate {
     if ([super init]) {
         aUrlSession = session;
         aUrlSessionConfiguration = configuration;
+        approovTaskSessionDelegate = delegate;
         return self;
     }
     return nil;
 }
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1411554-datataskwithurl?language=objc
-*/
-- (void)dataTaskWithURL:(NSURL *)url {
-     [self dataTaskWithRequest:[[NSURLRequest alloc] initWithURL:url]];
-}
-/*
-*  https://developer.apple.com/documentation/foundation/nsurlsession/1410330-datataskwithurl?language=objc
-*/
-- (void)dataTaskWithURL:(NSURL *)url
-                        completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-     [self dataTaskWithRequest:[[NSURLRequest alloc] initWithURL:url] completionHandler:completionHandler];
-}
+
+
 /*
 *  https://developer.apple.com/documentation/foundation/nsurlsession/1410592-datataskwithrequest?language=objc
 */
 - (void)dataTaskWithRequest:(NSURLRequest *)request{
-     [[NSURLSessionDataTask alloc] init];
-}
-
-/*  Add any additional session defined headers to a NSURLRequest object
- *  @param  request URLRequest
- *  @return copy of original request with additional session headers
- */
-- (NSURLRequest*)addUserHeadersToRequest:(NSURLRequest*)userRequest {
-    // Make a mutable copy
-    NSMutableURLRequest *newRequest = [userRequest mutableCopy];
-    NSDictionary* allHeaders = aUrlSessionConfiguration.HTTPAdditionalHeaders;
-    for (NSString* key in allHeaders){
-        [newRequest addValue:[allHeaders valueForKey:key] forHTTPHeaderField:key];
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionDataTask* sessionDataTask = [aUrlSession dataTaskWithRequest:[approovData getRequest]];
+        [sessionDataTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
     }
-    return [newRequest copy];
 }
 
 /*
@@ -66,34 +52,160 @@ NSURLSessionConfiguration* aUrlSessionConfiguration;
 */
 - (void)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    // Add user headers to request
-    NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // Fetch Token
-    ApproovData* approovData = [ApproovService fetchApproovToken:requestWithHeaders];
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
     // Decision
     if ([approovData getDecision] ==  ShouldProceed) {
-        NSLog(@"PROTO: ShouldProceed");
         // Go ahead and make the API call with the provided request object
         NSURLSessionDataTask* sessionDataTask = [aUrlSession dataTaskWithRequest:[approovData getRequest] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
             // Invoke completition handler
-            NSLog(@"PROTO: Before completionHandler");
             completionHandler(data,response,error);
-            NSLog(@"PROTO: After completionHandler");
         }];
         [sessionDataTask resume];
-        NSLog(@"PROTO: ShouldProceed break;");
+    } else {
+        // Invoke completition handler
+        completionHandler(nil,nil,[approovData error]);
+        // TODO: [sessionDataTask cancel]; ??????????
     }
-    NSLog(@"PROTO: ShouldRetry");
-    // Invoke completition handler
-    completionHandler(nil,nil,[approovData error]);
-    NSLog(@"PROTO: ShouldRetry break;");
-    
 }
 
-- (void) resume {
-    NSLog(@"ZZZ: resume");
-    //[super resume];
-    NSLog(@"ZZZ: super resume");
+
+
+- (void)downloadTaskWithRequest:(NSURLRequest *)request {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionDownloadTask* sessionDataTask = [aUrlSession downloadTaskWithRequest:[approovData getRequest]];
+        [sessionDataTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
+    }
+}
+
+
+- (void)downloadTaskWithRequest:(NSURLRequest *)request
+              completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        // Go ahead and make the API call with the provided request object
+        NSURLSessionDownloadTask* sessionDataTask = [aUrlSession downloadTaskWithRequest:[approovData getRequest] completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
+            // Invoke completition handler
+            completionHandler(location,response,error);
+        }];
+        [sessionDataTask resume];
+    } else {
+        // Invoke completition handler
+        completionHandler(nil,nil,[approovData error]);
+    }
+}
+
+
+//////
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+                                         fromFile:(NSURL *)fileURL {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionUploadTask* sessionUploadTask = [aUrlSession uploadTaskWithRequest:[approovData getRequest] fromFile:fileURL];
+        [sessionUploadTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
+    }
+    
+}
+/*
+*   https://developer.apple.com/documentation/foundation/nsurlsession/1411638-uploadtaskwithrequest?language=objc
+*/
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+         fromFile:(NSURL *)fileURL
+                                completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        // Go ahead and make the API call with the provided request object
+        NSURLSessionUploadTask* sessionUploadTask = [aUrlSession uploadTaskWithRequest:[approovData getRequest] fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            // Invoke completition handler
+            completionHandler(data,response,error);
+        }];
+        [sessionUploadTask resume];
+    } else {
+        // Invoke completition handler
+        completionHandler(nil,nil,[approovData error]);
+    }
+}
+
+///////
+- (void)uploadTaskWithStreamedRequest:(NSURLRequest *)request {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionUploadTask* sessionUploadTask = [aUrlSession uploadTaskWithStreamedRequest:[approovData getRequest]];
+        [sessionUploadTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
+    }
+}
+/*
+*   https://developer.apple.com/documentation/foundation/nsurlsession/3235750-websockettaskwithrequest?language=objc
+*/
+- (void)webSocketTaskWithRequest:(NSURLRequest *)request  API_AVAILABLE(ios(13.0)) {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionWebSocketTask* sessionWebSocketTask = [aUrlSession webSocketTaskWithRequest:[approovData getRequest]];
+        [sessionWebSocketTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
+    }
+}
+/*
+*   https://developer.apple.com/documentation/foundation/nsurlsession/1409763-uploadtaskwithrequest?language=objc
+*/
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+                     fromData:(NSData *)bodyData {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        NSURLSessionUploadTask* sessionUploadTask = [aUrlSession uploadTaskWithRequest:[approovData getRequest] fromData:bodyData];
+        [sessionUploadTask resume];
+    } else {
+        // Tell the delagate we are marking the session as invalid
+        [approovTaskSessionDelegate URLSession:aUrlSession didBecomeInvalidWithError:[approovData error]];
+    }
+    
+}
+/*
+*   https://developer.apple.com/documentation/foundation/nsurlsession/1411518-uploadtaskwithrequest?language=objc
+*/
+- (void)uploadTaskWithRequest:(NSURLRequest *)request
+         fromData:(NSData *)bodyData
+            completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
+    // Fetch Token
+    ApproovData* approovData = [ApproovService fetchApproovToken:request];
+    // Decision
+    if ([approovData getDecision] ==  ShouldProceed) {
+        // Go ahead and make the API call with the provided request object
+        NSURLSessionUploadTask* sessionUploadTask = [aUrlSession uploadTaskWithRequest:[approovData getRequest] fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            // Invoke completition handler
+            completionHandler(data,response,error);
+        }];
+        [sessionUploadTask resume];
+    } else {
+        // Invoke completition handler
+        completionHandler(nil,nil,[approovData error]);
+    }
 }
 
 @end

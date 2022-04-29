@@ -42,6 +42,8 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 + (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 + (void)precheck:(NSError**)error;
 + (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
++ (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
+     ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry;
 @end
 
 #endif /* ApproovService_h */
