@@ -16,6 +16,7 @@
 #ifndef ApproovService_h
 #define ApproovService_h
 
+#import <Foundation/Foundation.h>
 /* Token fetch decision code */
 typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
     ShouldProceed,
@@ -48,6 +49,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 + (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 + (void)precheck:(NSError**)error;
 + (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
++ (NSDictionary*)getPins:(NSString*)pinType;
 + (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
      ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry;
 /* The underlying Approov SDK error enum status codes mapped to a NSString */

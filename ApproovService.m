@@ -484,6 +484,16 @@ static NSString* initialConfigString = nil;
     return returnData;
 }
 
+
+/*  Convenient function that just forwards the call to the Approov SDK. Requests a pin type and returns
+ *  a dictionary of host to pins
+ */
++ (NSDictionary*)getPins:(NSString*)pinType {
+    NSDictionary* returnDictionary = [Approov getPins:pinType];
+    return returnDictionary;
+}
+
+
 /* Performs a precheck to determine if the app will pass attestation. This requires secure
 * strings to be enabled for the account, although no strings need to be set up. This will
 * likely require network access so may take some time to complete. It may return an error
