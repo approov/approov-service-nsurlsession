@@ -858,7 +858,7 @@ static NSString* stateKeyPath = @"state";
          *  as long as the Approov token fetch operation is triggered.
          */
         if (newValue == NSURLSessionTaskStateRunning) {
-            // TODO: [object suspend]?
+            // TODO: check I forgot why used [object suspend]?
             [task suspend];
             // Contact Approov service
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
@@ -878,6 +878,13 @@ static NSString* stateKeyPath = @"state";
                 return;
             } else {
                 // TODO: how to indicate error to client? Maybe get the task delegate if iOS > 15
+                // This needs testing
+                // Case 1: for when the user function relies on a (session) delegate, this should work?
+                [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
+                // Case 2: for when the closure completionHandler we should try using the (void*) context parameter so maybe
+                // we can invoke a function pointer equivalent to completionHandler(nil,nil,[approovData error]);
+                // The problem then is, from what I have read, the reference is weak so not sure if we hold a hard reference we could do it.
+                // This would require having an individual class for each observable object that holds a strong reference to the function
                 // We should cancel the request
                 // Remove observer and resume the original task
                 [task removeObserver:self forKeyPath:stateKeyPath];
