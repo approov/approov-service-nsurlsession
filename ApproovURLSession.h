@@ -18,7 +18,7 @@
 #define ApproovURLSession_h
 
 #import <Foundation/Foundation.h>
-
+#import "ApproovService.h"
 @interface ApproovURLSession : NSObject
 - (instancetype)init NS_UNAVAILABLE;
 /*

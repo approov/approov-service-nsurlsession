@@ -15,10 +15,7 @@
 // THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #import "ApproovURLSession.h"
-#import "ApproovService.h"
 #import <CommonCrypto/CommonCrypto.h>
-// TODO: implement getPins: in ApproovService to remove the include bellow
-#import "Approov/Approov.h"
 
 /* The custom delegate */
 @interface ApproovURLSessionDelegate : NSObject <NSURLSessionDelegate,NSURLSessionTaskDelegate,NSURLSessionDataDelegate,NSURLSessionDownloadDelegate>
@@ -30,6 +27,8 @@
 
 /* The ApproovSessionTask observer */
 @interface ApproovSessionTaskObserver : NSObject
+typedef void (^completionHandlerData)(id, id, NSError*);
+-(void)addCompletionHandlerTask:(NSUInteger)taskId dataHandler:(completionHandlerData)handler;
 @end
 
 @implementation ApproovURLSession
@@ -113,6 +112,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
         // Invoke completition handler
         completionHandler(data,response,error);
     }];
+    // Add completionHandler
+    [taskObserver addCompletionHandlerTask:sessionDataTask.taskIdentifier dataHandler:completionHandler];
     // Add observer
     [sessionDataTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDataTask;
@@ -159,6 +160,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
         // Invoke completition handler
         completionHandler(location,response,error);
     }];
+    // Add completionHandler
+    [taskObserver addCompletionHandlerTask:sessionDownloadTask.taskIdentifier dataHandler:completionHandler];
     // Add observer
     [sessionDownloadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDownloadTask;
@@ -207,6 +210,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
         // Invoke completition handler
         completionHandler(data,response,error);
     }];
+    // Add completionHandler
+    [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -252,6 +257,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
         // Invoke completition handler
         completionHandler(data,response,error);
     }];
+    // Add completionHandler
+    [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -698,7 +705,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
             ApproovSDKError:nil ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
         return nil;
     }
-    NSDictionary* pins = [Approov getPins:@"public-key-sha256"];
+    NSDictionary* pins = [ApproovService getPins:@"public-key-sha256"];
     // if no pins are defined then we trust the connection
     if (pins == nil) {
         return serverTrust;
@@ -821,11 +828,30 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
 
 @implementation ApproovSessionTaskObserver
 static NSString* stateKeyPath = @"state";
-/* TODO: explain why we do this
- *
- *
- *
- *
+NSMutableDictionary<NSString*,id>* completionHandlers;
+
+-(instancetype)init {
+    if([super init]) {
+        completionHandlers = [[NSMutableDictionary alloc]init];
+        return self;
+    }
+    return nil;
+}
+
+/*  Adds a task UUID mapped to a function to be invoked as a callback in case of error
+ *  after cancelling the task
+ */
+
+
+-(void)addCompletionHandlerTask:(NSUInteger)taskId dataHandler:(completionHandlerData)handler {
+    NSString *key = [NSString stringWithFormat:@"%lu", (unsigned long)taskId];
+    [completionHandlers setValue:handler forKey:key];
+}
+/*
+ * It is necessary to use KVO and observe the task returned to the user in order to modify the original request
+ * Since we do not want to block the task in order to contact the Approov servers, we have to perform the Approov
+ * network connection asynchronously and depending on the result, modifu the header and resume the request or
+ * cncel the task after informing the caller of the error
  */
 -(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
@@ -842,6 +868,8 @@ static NSString* stateKeyPath = @"state";
         long newValue = [newC longValue];
         // The task at hand; we simply cast to superclass from which specific Data/Download ... etc classes inherit
         NSURLSessionTask* task = (NSURLSessionTask*)object;
+        // Find out the current task id
+        NSString* taskIdString = [NSString stringWithFormat:@"%lu", (unsigned long)task.taskIdentifier];
         NSLog(@"Currently task is in state %ld", newValue);
         /*  If the new state is Cancelling or Completed we must remove ourselves as observers and return
          *  because the user is either cancelling or the connection has simply terminated
@@ -875,16 +903,24 @@ static NSString* stateKeyPath = @"state";
                 // Remove observer and resume the original task
                 [task removeObserver:self forKeyPath:stateKeyPath];
                 [task resume];
+                // If the completionHandler is in dictionary, remove it since it will not be needed
+                if ([completionHandlers objectForKey:taskIdString] != nil) {
+                    [completionHandlers removeObjectForKey:taskIdString];
+                }
                 return;
             } else {
-                // TODO: how to indicate error to client? Maybe get the task delegate if iOS > 15
-                // This needs testing
-                // Case 1: for when the user function relies on a (session) delegate, this should work?
-                [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
-                // Case 2: for when the closure completionHandler we should try using the (void*) context parameter so maybe
-                // we can invoke a function pointer equivalent to completionHandler(nil,nil,[approovData error]);
-                // The problem then is, from what I have read, the reference is weak so not sure if we hold a hard reference we could do it.
-                // This would require having an individual class for each observable object that holds a strong reference to the function
+                // Error handling
+                // If the completionHandler is NOT in dictionary, call the session delegate
+                if ([completionHandlers objectForKey:taskIdString] == nil) {
+                    // Case 1: for when the user function relies on a (session) delegate
+                    [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
+                } else {
+                    // Case 2: for when the closure completionHandler needs invoked
+                    completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
+                    handler(nil, nil, [dataResult error]);
+                    // We have invoked the original handler with error message; remove it from dictionary
+                    [completionHandlers removeObjectForKey:taskIdString];
+                }
                 // We should cancel the request
                 // Remove observer and resume the original task
                 [task removeObserver:self forKeyPath:stateKeyPath];
