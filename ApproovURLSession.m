@@ -872,7 +872,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
         NSURLSessionTask* task = (NSURLSessionTask*)object;
         // Find out the current task id
         NSString* taskIdString = [NSString stringWithFormat:@"%lu", (unsigned long)task.taskIdentifier];
-        NSLog(@"Currently task is in state %ld", newValue);
         /*  If the new state is Cancelling or Completed we must remove ourselves as observers and return
          *  because the user is either cancelling or the connection has simply terminated
          */
@@ -900,9 +899,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
             // Suspend immediately the task
             [task suspend];
             // Contact Approov service
-            NSLog(@"Will fetch approov token");
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
-            NSLog(@"FINISHED fetch approov token");
             // Should we proceed?
             if([dataResult getDecision] == ShouldProceed) {
                 // Modify the original request
@@ -911,7 +908,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     IMP imp = [task methodForSelector:selector];
                     void (*func)(id, SEL, NSURLRequest*) = (void *)imp;
                     func(task, selector, [dataResult getRequest]);
-                    NSLog(@"Finished invoking callback");
                 } else {
                     // This means that NSURLRequest has removed the `updateCurrentRequest` method or we are observing an object that
                     // is not an instance of NSURLRequest. Both are fatal errors.
@@ -936,7 +932,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 }
                 // Resume the original task
                 [task resume];
-                NSLog(@"Finished invoking observer function. Original task resumed");
                 return;
             } else {
                 // Error handling
