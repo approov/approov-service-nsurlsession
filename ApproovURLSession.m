@@ -888,7 +888,10 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
          *  as long as the Approov token fetch operation is triggered.
          */
         if (newValue == NSURLSessionTaskStateRunning) {
-            // TODO: check I forgot why used [object suspend]?
+            // We do not need any information about further changes; we are done since we only need the furst ever resume call
+            // Remove observer
+            [task removeObserver:self forKeyPath:stateKeyPath];
+            // Suspend eimmediately the task
             [task suspend];
             // Contact Approov service
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
@@ -901,15 +904,14 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     void (*func)(id, SEL, NSURLRequest*) = (void *)imp;
                     func(task, selector, [dataResult getRequest]);
                 }
-                // Remove observer and resume the original task
-                [task removeObserver:self forKeyPath:stateKeyPath];
-                [task resume];
                 // If the completionHandler is in dictionary, remove it since it will not be needed
                 if ([completionHandlers objectForKey:taskIdString] != nil) {
                     @synchronized (completionHandlers) {
                         [completionHandlers removeObjectForKey:taskIdString];
                     }
                 }
+                // Resume the original task
+                [task resume];
                 return;
             } else {
                 // Error handling
@@ -927,8 +929,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     }
                 }
                 // We should cancel the request
-                // Remove observer and resume the original task
-                [task removeObserver:self forKeyPath:stateKeyPath];
                 [task cancel];
             }
         }
