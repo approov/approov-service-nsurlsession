@@ -845,7 +845,9 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
 
 -(void)addCompletionHandlerTask:(NSUInteger)taskId dataHandler:(completionHandlerData)handler {
     NSString *key = [NSString stringWithFormat:@"%lu", (unsigned long)taskId];
-    [completionHandlers setValue:handler forKey:key];
+    @synchronized (completionHandlers) {
+        [completionHandlers setValue:handler forKey:key];
+    }
 }
 /*
  * It is necessary to use KVO and observe the task returned to the user in order to modify the original request
@@ -895,7 +897,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 // Modify the original request
                 SEL selector = NSSelectorFromString(@"updateCurrentRequest:");
                 if ([task respondsToSelector:selector]) {
-                    NSLog(@"YEEEES");
                     IMP imp = [task methodForSelector:selector];
                     void (*func)(id, SEL, NSURLRequest*) = (void *)imp;
                     func(task, selector, [dataResult getRequest]);
@@ -905,7 +906,9 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 [task resume];
                 // If the completionHandler is in dictionary, remove it since it will not be needed
                 if ([completionHandlers objectForKey:taskIdString] != nil) {
-                    [completionHandlers removeObjectForKey:taskIdString];
+                    @synchronized (completionHandlers) {
+                        [completionHandlers removeObjectForKey:taskIdString];
+                    }
                 }
                 return;
             } else {
@@ -919,7 +922,9 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
                     handler(nil, nil, [dataResult error]);
                     // We have invoked the original handler with error message; remove it from dictionary
-                    [completionHandlers removeObjectForKey:taskIdString];
+                    @synchronized (completionHandlers) {
+                        [completionHandlers removeObjectForKey:taskIdString];
+                    }
                 }
                 // We should cancel the request
                 // Remove observer and resume the original task
