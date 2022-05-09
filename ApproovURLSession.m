@@ -879,22 +879,30 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
         if ((newValue == NSURLSessionTaskStateCompleted) || (newValue == NSURLSessionTaskStateCanceling)) {
             NSLog(@"task id %lu is cancelling or has completed; removing observer", (unsigned long)task.taskIdentifier);
             [task removeObserver:self forKeyPath:stateKeyPath];
+            // If the completionHandler is in dictionary, remove it since it will not be needed
+            if ([completionHandlers objectForKey:taskIdString] != nil) {
+                @synchronized (completionHandlers) {
+                    [completionHandlers removeObjectForKey:taskIdString];
+                }
+            }
             return;
         }
         /*  We detect the initial switch from when the task is created in Suspended state to when the user
          *  triggers the Resume state. We immediately pause the task by suspending it again and doing the background
          *  Approov network connection before considering if the actual connection should be resumed or terminated.
-         *  Note that this is meant to only happen during the initial resume call but if subsequent resume calls are made
-         *  as long as the Approov token fetch operation is triggered.
+         *  Note that this is meant to only happen during the initial resume call since we remove ourselves as observers
+         *  at the first ever resume call
          */
         if (newValue == NSURLSessionTaskStateRunning) {
             // We do not need any information about further changes; we are done since we only need the furst ever resume call
             // Remove observer
             [task removeObserver:self forKeyPath:stateKeyPath];
-            // Suspend eimmediately the task
+            // Suspend immediately the task
             [task suspend];
             // Contact Approov service
+            NSLog(@"Will fetch approov token");
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
+            NSLog(@"FINISHED fetch approov token");
             // Should we proceed?
             if([dataResult getDecision] == ShouldProceed) {
                 // Modify the original request
@@ -903,7 +911,23 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     IMP imp = [task methodForSelector:selector];
                     void (*func)(id, SEL, NSURLRequest*) = (void *)imp;
                     func(task, selector, [dataResult getRequest]);
-                }
+                    NSLog(@"Finished invoking callback");
+                } else {
+                    // This means that NSURLRequest has removed the `updateCurrentRequest` method or we are observing an object that
+                    // is not an instance of NSURLRequest. Both are fatal errors.
+                    NSString* erromMessageSting = [NSString stringWithFormat:@"%@ %@", @"Fatal ApproovSession error: Unable to modify NSURLRequest headers; object instance is of type", NSStringFromClass([task class])];
+                    NSError* error = [ApproovService createErrorWithCode:1001 userMessage:erromMessageSting ApproovSDKError:erromMessageSting ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
+                    // Now we need to find out if the user needs a callback or relies on a delegate to return the erro message
+                    // If the completionHandler is NOT in dictionary, call the session delegate
+                    if ([completionHandlers objectForKey:taskIdString] == nil) {
+                        // Case 1: for when the user function relies on a (session) delegate
+                        [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:error];
+                    } else {
+                        // Case 2: for when the closure completionHandler needs invoked
+                        completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
+                        handler(nil, nil, error);
+                    }
+                } // else
                 // If the completionHandler is in dictionary, remove it since it will not be needed
                 if ([completionHandlers objectForKey:taskIdString] != nil) {
                     @synchronized (completionHandlers) {
@@ -912,6 +936,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 }
                 // Resume the original task
                 [task resume];
+                NSLog(@"Finished invoking observer function. Original task resumed");
                 return;
             } else {
                 // Error handling
@@ -920,6 +945,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     // Case 1: for when the user function relies on a (session) delegate
                     [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
                 } else {
+                    [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
                     // Case 2: for when the closure completionHandler needs invoked
                     completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
                     handler(nil, nil, [dataResult error]);
@@ -928,7 +954,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                         [completionHandlers removeObjectForKey:taskIdString];
                     }
                 }
-                // We should cancel the request
+                // We should cancel the request since we are finished with error
                 [task cancel];
             }
         }
