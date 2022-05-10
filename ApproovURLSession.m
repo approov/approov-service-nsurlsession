@@ -107,13 +107,20 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
-    // Create the return object
-    NSURLSessionDataTask* sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-        // Invoke completition handler
-        completionHandler(data,response,error);
-    }];
-    // Add completionHandler
-    [taskObserver addCompletionHandlerTask:sessionDataTask.taskIdentifier dataHandler:completionHandler];
+    // The return object
+    NSURLSessionDataTask* sessionDataTask;
+    // Check if completionHandler is nil and if so provide a delegate version
+    if (completionHandler != nil) {
+        // Create the return object
+        sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+            // Invoke completition handler
+            completionHandler(data,response,error);
+        }];
+        // Add completionHandler
+        [taskObserver addCompletionHandlerTask:sessionDataTask.taskIdentifier dataHandler:completionHandler];
+    } else {
+        sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders];
+    }
     // Add observer
     [sessionDataTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDataTask;
@@ -156,12 +163,18 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionDownloadTask* sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
-        // Invoke completition handler
-        completionHandler(location,response,error);
-    }];
-    // Add completionHandler
-    [taskObserver addCompletionHandlerTask:sessionDownloadTask.taskIdentifier dataHandler:completionHandler];
+    NSURLSessionDownloadTask* sessionDownloadTask;
+    // Check if completionHandler is nil and if so provide a delegate version
+    if (completionHandler != nil){
+        sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
+            // Invoke completition handler
+            completionHandler(location,response,error);
+        }];
+        // Add completionHandler
+        [taskObserver addCompletionHandlerTask:sessionDownloadTask.taskIdentifier dataHandler:completionHandler];
+    } else {
+        sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders];
+    }
     // Add observer
     [sessionDownloadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDownloadTask;
@@ -206,12 +219,17 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionUploadTask* sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        // Invoke completition handler
-        completionHandler(data,response,error);
-    }];
-    // Add completionHandler
-    [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
+    NSURLSessionUploadTask* sessionUploadTask;
+    if(completionHandler != nil){
+        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            // Invoke completition handler
+            completionHandler(data,response,error);
+        }];
+        // Add completionHandler
+        [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
+    } else {
+        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL];
+    }
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -253,12 +271,18 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionUploadTask* sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        // Invoke completition handler
-        completionHandler(data,response,error);
-    }];
-    // Add completionHandler
-    [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
+    NSURLSessionUploadTask* sessionUploadTask;
+    if (completionHandler != nil){
+        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            // Invoke completition handler
+            completionHandler(data,response,error);
+        }];
+        // Add completionHandler
+        [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
+    } else {
+        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData];
+    }
+    
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -426,8 +450,11 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     NSError* error;
     SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
     if ((error == nil) && (serverTrust != nil)) {
-        completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
-        [approovURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+        if (approovURLDelegate == nil) {
+            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+        } else {
+            [approovURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+        }
         return;
     }
     if(error != nil){
@@ -462,8 +489,11 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         NSError* error;
         SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
         if ((error == nil) && (serverTrust != nil)) {
-            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
-            [approovURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+            if (approovURLDelegate == nil) {
+                completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+            } else {
+                [approovURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+            }
             return;
         }
         if(error != nil){
@@ -872,7 +902,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
         NSURLSessionTask* task = (NSURLSessionTask*)object;
         // Find out the current task id
         NSString* taskIdString = [NSString stringWithFormat:@"%lu", (unsigned long)task.taskIdentifier];
-        NSLog(@"Currently task is in state %ld", newValue);
         /*  If the new state is Cancelling or Completed we must remove ourselves as observers and return
          *  because the user is either cancelling or the connection has simply terminated
          */
@@ -900,9 +929,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
             // Suspend immediately the task
             [task suspend];
             // Contact Approov service
-            NSLog(@"Will fetch approov token");
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
-            NSLog(@"FINISHED fetch approov token");
             // Should we proceed?
             if([dataResult getDecision] == ShouldProceed) {
                 // Modify the original request
@@ -911,7 +938,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     IMP imp = [task methodForSelector:selector];
                     void (*func)(id, SEL, NSURLRequest*) = (void *)imp;
                     func(task, selector, [dataResult getRequest]);
-                    NSLog(@"Finished invoking callback");
                 } else {
                     // This means that NSURLRequest has removed the `updateCurrentRequest` method or we are observing an object that
                     // is not an instance of NSURLRequest. Both are fatal errors.
@@ -936,7 +962,6 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 }
                 // Resume the original task
                 [task resume];
-                NSLog(@"Finished invoking observer function. Original task resumed");
                 return;
             } else {
                 // Error handling
