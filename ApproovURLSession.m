@@ -113,7 +113,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     if (completionHandler != nil) {
         // Create the return object
         sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-            // Invoke completition handler
+            // Invoke completion handler
             completionHandler(data,response,error);
         }];
         // Add completionHandler
@@ -167,7 +167,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil){
         sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
-            // Invoke completition handler
+            // Invoke completion handler
             completionHandler(location,response,error);
         }];
         // Add completionHandler
@@ -220,9 +220,10 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
+    // Check if completionHandler is nil and if so provide a delegate version
     if(completionHandler != nil){
         sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            // Invoke completition handler
+            // Invoke completion handler
             completionHandler(data,response,error);
         }];
         // Add completionHandler
@@ -272,6 +273,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
+    // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil){
         sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             // Invoke completition handler
@@ -882,8 +884,8 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
 /*
  * It is necessary to use KVO and observe the task returned to the user in order to modify the original request
  * Since we do not want to block the task in order to contact the Approov servers, we have to perform the Approov
- * network connection asynchronously and depending on the result, modifu the header and resume the request or
- * cncel the task after informing the caller of the error
+ * network connection asynchronously and depending on the result, modify the header and resume the request or
+ * cancel the task after informing the caller of the error
  */
 -(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
@@ -926,7 +928,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
             // We do not need any information about further changes; we are done since we only need the furst ever resume call
             // Remove observer
             [task removeObserver:self forKeyPath:stateKeyPath];
-            // Suspend immediately the task
+            // Suspend immediately the task: Note this is optional since the current callback is executed before another one being invoked
             [task suspend];
             // Contact Approov service
             ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
