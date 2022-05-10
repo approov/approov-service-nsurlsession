@@ -112,10 +112,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil) {
         // Create the return object
-        sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
-            // Invoke completion handler
-            completionHandler(data,response,error);
-        }];
+        sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders completionHandler:completionHandler];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionDataTask.taskIdentifier dataHandler:completionHandler];
     } else {
@@ -166,10 +163,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLSessionDownloadTask* sessionDownloadTask;
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil){
-        sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
-            // Invoke completion handler
-            completionHandler(location,response,error);
-        }];
+        sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders completionHandler:completionHandler];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionDownloadTask.taskIdentifier dataHandler:completionHandler];
     } else {
@@ -222,10 +216,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLSessionUploadTask* sessionUploadTask;
     // Check if completionHandler is nil and if so provide a delegate version
     if(completionHandler != nil){
-        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            // Invoke completion handler
-            completionHandler(data,response,error);
-        }];
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:completionHandler];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     } else {
@@ -275,10 +266,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLSessionUploadTask* sessionUploadTask;
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil){
-        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            // Invoke completition handler
-            completionHandler(data,response,error);
-        }];
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:completionHandler];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     } else {
@@ -444,9 +432,11 @@ static NSDictionary<NSString *, NSDictionary<NSNumber *, NSData *> *> *sSPKIHead
 - (void)URLSession:(NSURLSession *)session
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
+    BOOL respondsToSelector = [optionalURLDelegate respondsToSelector:@selector(URLSession:didReceiveChallenge:completionHandler:)];
     // we are only interested in server trust requests
     if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
-        [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler: completionHandler];
+        if ((optionalURLDelegate != nil) && respondsToSelector)
+            [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler: completionHandler];
         return;
     }
     NSError* error;
@@ -455,7 +445,9 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         if (optionalURLDelegate == nil) {
             completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
         } else {
-            [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+            if(respondsToSelector){
+                [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+            }
         }
         return;
     }
@@ -482,32 +474,34 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
               task:(NSURLSessionTask *)task
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
-    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]){
-        // we are only interested in server trust requests
-        if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
+    BOOL respondsToSelector = [optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)];
+    // we are only interested in server trust requests
+    if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
+        if ((optionalURLDelegate != nil) && respondsToSelector)
             [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
-            return;
-        }
-        NSError* error;
-        SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
-        if ((error == nil) && (serverTrust != nil)) {
-            if (optionalURLDelegate == nil) {
-                completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
-            } else {
+        return;
+    }
+    NSError* error;
+    SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
+    if ((error == nil) && (serverTrust != nil)) {
+        if (optionalURLDelegate == nil) {
+            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+        } else {
+            if(respondsToSelector){
                 [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
             }
-            return;
         }
-        if(error != nil){
-            // Log error message
-            NSLog(@"Pinning: %@", error.localizedDescription);
-        } else {
-            // serverTrust == nil
-            NSLog(@"Pinning: No pins match for host %@", challenge.protectionSpace.host);
-        }
-        // Cancel connection
-        completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
+        return;
     }
+    if(error != nil){
+        // Log error message
+        NSLog(@"Pinning: %@", error.localizedDescription);
+    } else {
+        // serverTrust == nil
+        NSLog(@"Pinning: No pins match for host %@", challenge.protectionSpace.host);
+    }
+    // Cancel connection
+    completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
 }
 
 /*  Tells the delegate that the task finished transferring data
@@ -911,8 +905,8 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
             NSLog(@"task id %lu is cancelling or has completed; removing observer", (unsigned long)task.taskIdentifier);
             [task removeObserver:self forKeyPath:stateKeyPath];
             // If the completionHandler is in dictionary, remove it since it will not be needed
-            if ([completionHandlers objectForKey:taskIdString] != nil) {
-                @synchronized (completionHandlers) {
+            @synchronized (completionHandlers) {
+                if ([completionHandlers objectForKey:taskIdString] != nil) {
                     [completionHandlers removeObjectForKey:taskIdString];
                 }
             }
@@ -943,22 +937,12 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 } else {
                     // This means that NSURLRequest has removed the `updateCurrentRequest` method or we are observing an object that
                     // is not an instance of NSURLRequest. Both are fatal errors.
-                    NSString* erromMessageSting = [NSString stringWithFormat:@"%@ %@", @"Fatal ApproovSession error: Unable to modify NSURLRequest headers; object instance is of type", NSStringFromClass([task class])];
-                    NSError* error = [ApproovService createErrorWithCode:1001 userMessage:erromMessageSting ApproovSDKError:erromMessageSting ApproovSDKRejectionReasons:nil ApproovSDKARC:nil canRetry:NO];
-                    // Now we need to find out if the user needs a callback or relies on a delegate to return the erro message
-                    // If the completionHandler is NOT in dictionary, call the session delegate
-                    if ([completionHandlers objectForKey:taskIdString] == nil) {
-                        // Case 1: for when the user function relies on a (session) delegate
-                        [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:error];
-                    } else {
-                        // Case 2: for when the closure completionHandler needs invoked
-                        completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
-                        handler(nil, nil, error);
-                    }
+                    NSString* errorMessageSting = [NSString stringWithFormat:@"%@ %@", @"Fatal ApproovSession error: Unable to modify NSURLRequest headers; object instance is of type", NSStringFromClass([task class])];
+                    NSLog(@"approov-service: %@", errorMessageSting);
                 } // else
                 // If the completionHandler is in dictionary, remove it since it will not be needed
-                if ([completionHandlers objectForKey:taskIdString] != nil) {
-                    @synchronized (completionHandlers) {
+                @synchronized (completionHandlers) {
+                    if ([completionHandlers objectForKey:taskIdString] != nil) {
                         [completionHandlers removeObjectForKey:taskIdString];
                     }
                 }
@@ -967,17 +951,12 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 return;
             } else {
                 // Error handling
-                // If the completionHandler is NOT in dictionary, call the session delegate
-                if ([completionHandlers objectForKey:taskIdString] == nil) {
-                    // Case 1: for when the user function relies on a (session) delegate
+                @synchronized (completionHandlers) {
                     [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:[dataResult error]];
-                } else {
-                    [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:[dataResult error]];
-                    // Case 2: for when the closure completionHandler needs invoked
-                    completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
-                    handler(nil, nil, [dataResult error]);
-                    // We have invoked the original handler with error message; remove it from dictionary
-                    @synchronized (completionHandlers) {
+                    if ([completionHandlers objectForKey:taskIdString] != nil) {
+                        completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
+                        handler(nil, nil, [dataResult error]);
+                        // We have invoked the original handler with error message; remove it from dictionary
                         [completionHandlers removeObjectForKey:taskIdString];
                     }
                 }
