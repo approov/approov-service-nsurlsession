@@ -18,7 +18,7 @@
 #import <CommonCrypto/CommonCrypto.h>
 
 /* The custom delegate */
-@interface ApproovURLSessionDelegate : NSObject <NSURLSessionDelegate,NSURLSessionTaskDelegate,NSURLSessionDataDelegate,NSURLSessionDownloadDelegate>
+@interface PinningURLSessionDelegate : NSObject <NSURLSessionDelegate,NSURLSessionTaskDelegate,NSURLSessionDataDelegate,NSURLSessionDownloadDelegate>
 - (instancetype)initWithDelegate: (id<NSURLSessionDelegate>)delegate;
 @end
 
@@ -34,9 +34,9 @@ typedef void (^completionHandlerData)(id, id, NSError*);
 @implementation ApproovURLSession
 
 
-NSURLSession* urlSession;
+NSURLSession* pinnedURLSession;
 NSURLSessionConfiguration* urlSessionConfiguration;
-ApproovURLSessionDelegate* urlSessionDelegate;
+PinningURLSessionDelegate* pinnedURLSessionDelegate;
 NSOperationQueue* delegateQueue;
 // The observer object
 ApproovSessionTaskObserver* taskObserver;
@@ -47,10 +47,10 @@ ApproovSessionTaskObserver* taskObserver;
 + (ApproovURLSession*)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration
                                       delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue {
     urlSessionConfiguration = configuration;
-    urlSessionDelegate = [[ApproovURLSessionDelegate alloc] initWithDelegate:delegate];
+    pinnedURLSessionDelegate = [[PinningURLSessionDelegate alloc] initWithDelegate:delegate];
     delegateQueue = queue;
     // Set as URLSession delegate our implementation
-    urlSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:urlSessionDelegate delegateQueue:delegateQueue];
+    pinnedURLSession = [NSURLSession sessionWithConfiguration:urlSessionConfiguration delegate:pinnedURLSessionDelegate delegateQueue:delegateQueue];
     taskObserver = [[ApproovSessionTaskObserver alloc] init];
     return [[ApproovURLSession alloc] init];
 }
@@ -93,7 +93,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // Create the return object
-    NSURLSessionDataTask* sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders];
+    NSURLSessionDataTask* sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders];
     // Add observer
     [sessionDataTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDataTask;
@@ -112,14 +112,14 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil) {
         // Create the return object
-        sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
+        sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders completionHandler:^(NSData *data, NSURLResponse *response, NSError *error){
             // Invoke completition handler
             completionHandler(data,response,error);
         }];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionDataTask.taskIdentifier dataHandler:completionHandler];
     } else {
-        sessionDataTask = [urlSession dataTaskWithRequest:requestWithHeaders];
+        sessionDataTask = [pinnedURLSession dataTaskWithRequest:requestWithHeaders];
     }
     // Add observer
     [sessionDataTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
@@ -149,7 +149,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionDownloadTask* sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders];
+    NSURLSessionDownloadTask* sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders];
     // Add observer
     [sessionDownloadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionDownloadTask;
@@ -166,14 +166,14 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     NSURLSessionDownloadTask* sessionDownloadTask;
     // Check if completionHandler is nil and if so provide a delegate version
     if (completionHandler != nil){
-        sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
+        sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error){
             // Invoke completition handler
             completionHandler(location,response,error);
         }];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionDownloadTask.taskIdentifier dataHandler:completionHandler];
     } else {
-        sessionDownloadTask = [urlSession downloadTaskWithRequest:requestWithHeaders];
+        sessionDownloadTask = [pinnedURLSession downloadTaskWithRequest:requestWithHeaders];
     }
     // Add observer
     [sessionDownloadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
@@ -184,7 +184,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  *   see ApproovURLSession.h
  */
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData {
-    return [urlSession downloadTaskWithResumeData:resumeData];
+    return [pinnedURLSession downloadTaskWithResumeData:resumeData];
 }
 
 /*  NOTE: this call is not protected by Approov
@@ -192,7 +192,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  */
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData
                                        completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
-    return [urlSession downloadTaskWithResumeData:resumeData completionHandler:completionHandler];
+    return [pinnedURLSession downloadTaskWithResumeData:resumeData completionHandler:completionHandler];
 }
 
 // MARK: Upload Tasks
@@ -204,7 +204,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionUploadTask* sessionUploadTask = [urlSession uploadTaskWithRequest: requestWithHeaders fromFile:fileURL];
+    NSURLSessionUploadTask* sessionUploadTask = [pinnedURLSession uploadTaskWithRequest: requestWithHeaders fromFile:fileURL];
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -221,14 +221,14 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if(completionHandler != nil){
-        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             // Invoke completition handler
             completionHandler(data,response,error);
         }];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     } else {
-        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL];
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromFile:fileURL];
     }
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
@@ -242,7 +242,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionUploadTask* sessionUploadTask = [urlSession uploadTaskWithStreamedRequest:requestWithHeaders];
+    NSURLSessionUploadTask* sessionUploadTask = [pinnedURLSession uploadTaskWithStreamedRequest:requestWithHeaders];
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -256,7 +256,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionUploadTask* sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData];
+    NSURLSessionUploadTask* sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData];
     // Add observer
     [sessionUploadTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionUploadTask;
@@ -273,14 +273,14 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // The return object
     NSURLSessionUploadTask* sessionUploadTask;
     if (completionHandler != nil){
-        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             // Invoke completition handler
             completionHandler(data,response,error);
         }];
         // Add completionHandler
         [taskObserver addCompletionHandlerTask:sessionUploadTask.taskIdentifier dataHandler:completionHandler];
     } else {
-        sessionUploadTask = [urlSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData];
+        sessionUploadTask = [pinnedURLSession uploadTaskWithRequest:requestWithHeaders fromData:bodyData];
     }
     
     // Add observer
@@ -305,7 +305,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
     // Add the session headers to the task
     NSURLRequest* requestWithHeaders = [self addUserHeadersToRequest:request];
     // The return object
-    NSURLSessionWebSocketTask* sessionWebSocketTask = [urlSession webSocketTaskWithRequest:requestWithHeaders];
+    NSURLSessionWebSocketTask* sessionWebSocketTask = [pinnedURLSession webSocketTaskWithRequest:requestWithHeaders];
     // Add observer
     [sessionWebSocketTask addObserver:taskObserver forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     return sessionWebSocketTask;
@@ -316,37 +316,37 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  *   see ApproovURLSession.h
  */
 - (void)finishTasksAndInvalidate {
-    [urlSession finishTasksAndInvalidate];
+    [pinnedURLSession finishTasksAndInvalidate];
 }
 /*
  *   see ApproovURLSession.h
  */
 - (void)flushWithCompletionHandler:(void (^)(void))completionHandler {
-    [urlSession flushWithCompletionHandler:completionHandler];
+    [pinnedURLSession flushWithCompletionHandler:completionHandler];
 }
 /*
  *   see ApproovURLSession.h
  */
 - (void)getTasksWithCompletionHandler:(void (^)(NSArray<NSURLSessionDataTask *> *dataTasks, NSArray<NSURLSessionUploadTask *> *uploadTasks, NSArray<NSURLSessionDownloadTask *> *downloadTasks))completionHandler {
-    [urlSession getTasksWithCompletionHandler:completionHandler];
+    [pinnedURLSession getTasksWithCompletionHandler:completionHandler];
 }
 /*
  *   see ApproovURLSession.h
  */
 - (void)getAllTasksWithCompletionHandler:(void (^)(NSArray<__kindof NSURLSessionTask *> *tasks))completionHandler {
-    [urlSession getAllTasksWithCompletionHandler:completionHandler];
+    [pinnedURLSession getAllTasksWithCompletionHandler:completionHandler];
 }
 /*
  *   see ApproovURLSession.h
  */
 - (void)invalidateAndCancel {
-    [urlSession invalidateAndCancel];
+    [pinnedURLSession invalidateAndCancel];
 }
 /*
  *   see ApproovURLSession.h
  */
 - (void)resetWithCompletionHandler:(void (^)(void))completionHandler {
-    [urlSession resetWithCompletionHandler:completionHandler];
+    [pinnedURLSession resetWithCompletionHandler:completionHandler];
 }
 
 /*  Add any additional session defined headers to a NSURLRequest object
@@ -369,8 +369,8 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
 
 
 
-@implementation ApproovURLSessionDelegate
-id<NSURLSessionDelegate,NSURLSessionTaskDelegate,NSURLSessionDataDelegate,NSURLSessionDownloadDelegate> approovURLDelegate;
+@implementation PinningURLSessionDelegate
+id<NSURLSessionDelegate,NSURLSessionTaskDelegate,NSURLSessionDataDelegate,NSURLSessionDownloadDelegate> optionalURLDelegate;
 BOOL mPKIInitialized;
 /* Subject public key info (SPKI) headers for public keys' type and size. Only RSA-2048, RSA-4096, EC-256 and EC-384 are supported.
  */
@@ -410,7 +410,7 @@ static NSDictionary<NSString *, NSDictionary<NSNumber *, NSData *> *> *sSPKIHead
         if (!mPKIInitialized){
             [self initializePKI];
         }
-        approovURLDelegate = delegate;
+        optionalURLDelegate = delegate;
         return self;
     }
     return nil;
@@ -426,14 +426,14 @@ static NSDictionary<NSString *, NSDictionary<NSNumber *, NSData *> *> *sSPKIHead
  *  https://developer.apple.com/documentation/foundation/nsurlsessiondelegate/1407776-urlsession?language=objc
  */
 - (void)URLSession:(NSURLSession *)session didBecomeInvalidWithError:(NSError *)error {
-    [approovURLDelegate URLSession:session didBecomeInvalidWithError:error];
+    [optionalURLDelegate URLSession:session didBecomeInvalidWithError:error];
 }
 
 /*  Tells the delegate that all messages enqueued for a session have been delivered
  *  https://developer.apple.com/documentation/foundation/nsurlsessiondelegate/1617185-urlsessiondidfinisheventsforback?language=objc
  */
 - (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session {
-    [approovURLDelegate URLSessionDidFinishEventsForBackgroundURLSession:session];
+    [optionalURLDelegate URLSessionDidFinishEventsForBackgroundURLSession:session];
 }
 
 /*  Requests credentials from the delegate in response to a session-level authentication request from the remote server
@@ -444,16 +444,16 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     // we are only interested in server trust requests
     if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
-        [approovURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler: completionHandler];
+        [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler: completionHandler];
         return;
     }
     NSError* error;
     SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
     if ((error == nil) && (serverTrust != nil)) {
-        if (approovURLDelegate == nil) {
+        if (optionalURLDelegate == nil) {
             completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
         } else {
-            [approovURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+            [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
         }
         return;
     }
@@ -480,19 +480,19 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
               task:(NSURLSessionTask *)task
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]){
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]){
         // we are only interested in server trust requests
         if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
-            [approovURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+            [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
             return;
         }
         NSError* error;
         SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
         if ((error == nil) && (serverTrust != nil)) {
-            if (approovURLDelegate == nil) {
+            if (optionalURLDelegate == nil) {
                 completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
             } else {
-                [approovURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+                [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
             }
             return;
         }
@@ -514,8 +514,8 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:didCompleteWithError:)]){
-        [approovURLDelegate URLSession:session task:task didCompleteWithError:error];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:didCompleteWithError:)]){
+        [optionalURLDelegate URLSession:session task:task didCompleteWithError:error];
     }
 }
 
@@ -527,8 +527,8 @@ didCompleteWithError:(NSError *)error {
 willPerformHTTPRedirection:(NSHTTPURLResponse *)response
         newRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLRequest *))completionHandler {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:willPerformHTTPRedirection:newRequest:completionHandler:)]){
-        [approovURLDelegate URLSession:session task:task willPerformHTTPRedirection:response newRequest:request completionHandler:completionHandler];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:willPerformHTTPRedirection:newRequest:completionHandler:)]){
+        [optionalURLDelegate URLSession:session task:task willPerformHTTPRedirection:response newRequest:request completionHandler:completionHandler];
     }
 }
 
@@ -538,8 +538,8 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
 - (void)URLSession:(NSURLSession *)session
              task:(NSURLSessionTask *)task
  needNewBodyStream:(void (^)(NSInputStream *bodyStream))completionHandler {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:needNewBodyStream:)]){
-        [approovURLDelegate URLSession:session task:task needNewBodyStream:completionHandler];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:needNewBodyStream:)]){
+        [optionalURLDelegate URLSession:session task:task needNewBodyStream:completionHandler];
     }
 }
 
@@ -551,8 +551,8 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
    didSendBodyData:(int64_t)bytesSent
     totalBytesSent:(int64_t)totalBytesSent
 totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend:)]){
-        [approovURLDelegate URLSession:session task:task didSendBodyData:bytesSent totalBytesSent:totalBytesSent totalBytesExpectedToSend:totalBytesExpectedToSend];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend:)]){
+        [optionalURLDelegate URLSession:session task:task didSendBodyData:bytesSent totalBytesSent:totalBytesSent totalBytesExpectedToSend:totalBytesExpectedToSend];
     }
 }
 
@@ -563,8 +563,8 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
               task:(NSURLSessionTask *)task
 willBeginDelayedRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLSessionDelayedRequestDisposition disposition, NSURLRequest *newRequest))completionHandler  API_AVAILABLE(ios(11.0)){
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:willBeginDelayedRequest:completionHandler:)]){
-        [approovURLDelegate URLSession:session task:task willBeginDelayedRequest:request completionHandler:completionHandler];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:willBeginDelayedRequest:completionHandler:)]){
+        [optionalURLDelegate URLSession:session task:task willBeginDelayedRequest:request completionHandler:completionHandler];
     }
 }
 
@@ -574,8 +574,8 @@ willBeginDelayedRequest:(NSURLRequest *)request
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:task:didFinishCollectingMetrics:)]){
-        [approovURLDelegate URLSession:session task:task didFinishCollectingMetrics:metrics];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:task:didFinishCollectingMetrics:)]){
+        [optionalURLDelegate URLSession:session task:task didFinishCollectingMetrics:metrics];
     }
 }
 
@@ -584,8 +584,8 @@ didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics {
  */
 - (void)URLSession:(NSURLSession *)session
 taskIsWaitingForConnectivity:(NSURLSessionTask *)task API_AVAILABLE(ios(11.0)) {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:taskIsWaitingForConnectivity:)]){
-        [approovURLDelegate URLSession:session taskIsWaitingForConnectivity:task];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:taskIsWaitingForConnectivity:)]){
+        [optionalURLDelegate URLSession:session taskIsWaitingForConnectivity:task];
     }
 }
 
@@ -603,8 +603,8 @@ taskIsWaitingForConnectivity:(NSURLSessionTask *)task API_AVAILABLE(ios(11.0)) {
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveResponse:completionHandler:)]){
-        [approovURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveResponse:completionHandler:)]){
+        [optionalURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
     }
 }
 
@@ -614,8 +614,8 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:dataTask:didBecomeDownloadTask:)]){
-        [approovURLDelegate URLSession:session dataTask:dataTask didBecomeDownloadTask:downloadTask];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didBecomeDownloadTask:)]){
+        [optionalURLDelegate URLSession:session dataTask:dataTask didBecomeDownloadTask:downloadTask];
     }
 }
 
@@ -625,8 +625,8 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask {
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didBecomeStreamTask:(NSURLSessionStreamTask *)streamTask {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:dataTask:didBecomeStreamTask:)]){
-        [approovURLDelegate URLSession:session dataTask:dataTask didBecomeStreamTask:streamTask];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didBecomeStreamTask:)]){
+        [optionalURLDelegate URLSession:session dataTask:dataTask didBecomeStreamTask:streamTask];
     }
 }
 
@@ -636,8 +636,8 @@ didBecomeStreamTask:(NSURLSessionStreamTask *)streamTask {
 - (void)URLSession:(NSURLSession *)session
       dataTask:(NSURLSessionDataTask *)dataTask
     didReceiveData:(NSData *)data {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveData:)]){
-        [approovURLDelegate URLSession:session dataTask:dataTask didReceiveData:data];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveData:)]){
+        [optionalURLDelegate URLSession:session dataTask:dataTask didReceiveData:data];
     }
 }
 
@@ -648,8 +648,8 @@ didBecomeStreamTask:(NSURLSessionStreamTask *)streamTask {
          dataTask:(NSURLSessionDataTask *)dataTask
 willCacheResponse:(NSCachedURLResponse *)proposedResponse
  completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:dataTask:willCacheResponse:completionHandler:)]){
-        [approovURLDelegate URLSession:session dataTask:dataTask willCacheResponse:proposedResponse completionHandler:completionHandler];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:willCacheResponse:completionHandler:)]){
+        [optionalURLDelegate URLSession:session dataTask:dataTask willCacheResponse:proposedResponse completionHandler:completionHandler];
     }
 }
 
@@ -664,8 +664,8 @@ willCacheResponse:(NSCachedURLResponse *)proposedResponse
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
 didFinishDownloadingToURL:(NSURL *)location {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didFinishDownloadingToURL:)]){
-        [approovURLDelegate URLSession:session downloadTask:downloadTask didFinishDownloadingToURL:location];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didFinishDownloadingToURL:)]){
+        [optionalURLDelegate URLSession:session downloadTask:downloadTask didFinishDownloadingToURL:location];
     }
 }
 
@@ -676,8 +676,8 @@ didFinishDownloadingToURL:(NSURL *)location {
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
  didResumeAtOffset:(int64_t)fileOffset
 expectedTotalBytes:(int64_t)expectedTotalBytes {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didResumeAtOffset:expectedTotalBytes:)]){
-        [approovURLDelegate URLSession:session downloadTask:downloadTask didResumeAtOffset:fileOffset expectedTotalBytes:expectedTotalBytes];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didResumeAtOffset:expectedTotalBytes:)]){
+        [optionalURLDelegate URLSession:session downloadTask:downloadTask didResumeAtOffset:fileOffset expectedTotalBytes:expectedTotalBytes];
     }
 }
 
@@ -689,8 +689,8 @@ expectedTotalBytes:(int64_t)expectedTotalBytes {
       didWriteData:(int64_t)bytesWritten
  totalBytesWritten:(int64_t)totalBytesWritten
 totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
-    if([approovURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:)]){
-        [approovURLDelegate URLSession:session downloadTask:downloadTask didWriteData:bytesWritten totalBytesWritten:totalBytesWritten totalBytesExpectedToWrite:totalBytesExpectedToWrite];
+    if([optionalURLDelegate respondsToSelector:@selector(URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:)]){
+        [optionalURLDelegate URLSession:session downloadTask:downloadTask didWriteData:bytesWritten totalBytesWritten:totalBytesWritten totalBytesExpectedToWrite:totalBytesExpectedToWrite];
     }
 }
 
@@ -947,7 +947,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                     // If the completionHandler is NOT in dictionary, call the session delegate
                     if ([completionHandlers objectForKey:taskIdString] == nil) {
                         // Case 1: for when the user function relies on a (session) delegate
-                        [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:error];
+                        [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:error];
                     } else {
                         // Case 2: for when the closure completionHandler needs invoked
                         completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
@@ -968,9 +968,9 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 // If the completionHandler is NOT in dictionary, call the session delegate
                 if ([completionHandlers objectForKey:taskIdString] == nil) {
                     // Case 1: for when the user function relies on a (session) delegate
-                    [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
+                    [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:[dataResult error]];
                 } else {
-                    [urlSessionDelegate URLSession:urlSession didBecomeInvalidWithError:[dataResult error]];
+                    [pinnedURLSessionDelegate URLSession:pinnedURLSession didBecomeInvalidWithError:[dataResult error]];
                     // Case 2: for when the closure completionHandler needs invoked
                     completionHandlerData handler = [completionHandlers objectForKey:taskIdString];
                     handler(nil, nil, [dataResult error]);
@@ -988,3 +988,4 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
 }
 
 @end
+
