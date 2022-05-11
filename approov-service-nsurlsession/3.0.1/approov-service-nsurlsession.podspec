@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.authors      = { "CriticalBlue, Ltd." => "support@approov.io" }
   s.platform     = :ios
   s.source       = { :git => "https://github.com/approov/approov-service-nsurlsession.git", :tag => "#{s.version}" }
-  s.source_files = 'ApproovURLSession.{h,m}'
+  s.source_files = 'ApproovURLSession.{h,m}, ApproovService.{h,m}'
   s.ios.deployment_target  = '10.0'
   s.pod_target_xcconfig = { 'VALID_ARCHS' => 'arm64 armv7 x86_64' }
   s.dependency 'approov-ios-sdk', '~> 3.0.0'
