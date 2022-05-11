@@ -442,12 +442,10 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     NSError* error;
     SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
     if ((error == nil) && (serverTrust != nil)) {
-        if (optionalURLDelegate == nil) {
+        if (respondsToSelector) {
+            [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
+        } else if (completionHandler != nil){
             completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
-        } else {
-            if(respondsToSelector){
-                [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler:completionHandler];
-            }
         }
         return;
     }
@@ -475,30 +473,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     BOOL respondsToSelector = [optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)];
+    SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
     // we are only interested in server trust requests
-    if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
-        if ((optionalURLDelegate != nil) && respondsToSelector)
-            [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
-        return;
-    }
-    NSError* error;
-    SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
-    if ((error == nil) && (serverTrust != nil)) {
-        if (optionalURLDelegate == nil) {
-            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
-        } else {
-            if(respondsToSelector){
-                [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
-            }
-        }
-        return;
-    }
-    if(error != nil){
-        // Log error message
-        NSLog(@"Pinning: %@", error.localizedDescription);
-    } else {
-        // serverTrust == nil
-        NSLog(@"Pinning: No pins match for host %@", challenge.protectionSpace.host);
+    if (respondsToSelector) {
+        [optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+    } else if (completionHandler != nil){
+        completionHandler(NSURLSessionAuthChallengeUseCredential,[[NSURLCredential alloc]initWithTrust:serverTrust]);
     }
     // Cancel connection
     completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
