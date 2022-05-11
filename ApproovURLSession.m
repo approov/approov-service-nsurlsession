@@ -435,8 +435,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     BOOL respondsToSelector = [optionalURLDelegate respondsToSelector:@selector(URLSession:didReceiveChallenge:completionHandler:)];
     // we are only interested in server trust requests
     if(![challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]){
-        if ((optionalURLDelegate != nil) && respondsToSelector)
+        if (respondsToSelector) {
             [optionalURLDelegate URLSession:session didReceiveChallenge:challenge completionHandler: completionHandler];
+        } else if (completionHandler != nil) {
+            NSLog(@"approov-service: Challenge authentication other than ServerTrust must be handled by a user delegate");
+            completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
+        }
         return;
     }
     NSError* error;
@@ -451,10 +455,10 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     }
     if(error != nil){
         // Log error message
-        NSLog(@"Pinning: %@", error.localizedDescription);
+        NSLog(@"approov-service: Pinning: %@", error.localizedDescription);
     } else {
         // serverTrust == nil
-        NSLog(@"Pinning: No pins match for host %@", challenge.protectionSpace.host);
+        NSLog(@"approov-service: Pinning: No pins match for host %@", challenge.protectionSpace.host);
     }
     // Cancel connection
     completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
@@ -480,8 +484,6 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     } else if (completionHandler != nil){
         completionHandler(NSURLSessionAuthChallengeUseCredential,[[NSURLCredential alloc]initWithTrust:serverTrust]);
     }
-    // Cancel connection
-    completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
 }
 
 /*  Tells the delegate that the task finished transferring data
