@@ -907,7 +907,7 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
             // Suspend immediately the task: Note this is optional since the current callback is executed before another one being invoked
             [task suspend];
             // Contact Approov service
-            ApproovData* dataResult = [ApproovService fetchApproovToken:task.currentRequest];
+            ApproovData* dataResult = [ApproovService updateRequestWithApproov:task.currentRequest];
             // Should we proceed?
             if([dataResult getDecision] == ShouldProceed) {
                 // Modify the original request
