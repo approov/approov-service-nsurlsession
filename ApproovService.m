@@ -410,7 +410,8 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
 
 /*
  *  Convenience function fetching the Approov token
- *  This function is internal and accessed by the ApproovURLSesssion class
+ *  @param  request The request to be updated
+ *  @return ApproovData object
  */
 + (ApproovData*)updateRequestWithApproov:(NSURLRequest*)request {
     ApproovData *returnData = [[ApproovData alloc] init];

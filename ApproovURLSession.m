@@ -931,6 +931,10 @@ NSMutableDictionary<NSString*,id>* completionHandlers;
                 // Resume the original task
                 [task resume];
                 return;
+            } else if ([dataResult getDecision] == ShouldIgnore) {
+                // We should ignore the request and not modify the headers in any way
+                [task resume];
+                return;
             } else {
                 // Error handling
                 @synchronized (completionHandlers) {
