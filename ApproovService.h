@@ -22,6 +22,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
     ShouldProceed,
     ShouldRetry,
     ShouldFail,
+    ShouldIgnore
 };
 
 /* Approov SDK token fetch return object */
@@ -36,6 +37,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 @interface ApproovService : NSObject
 - (instancetype)init NS_UNAVAILABLE;
 + (void)initialize:(NSString*)configString errorMessage:(NSError**)error;
++ (void)setProceedOnNetworkFailure:(BOOL)proceed;
 + (void)setBindHeader:(NSString*)newHeader;
 + (NSString*)getBindHeader;
 + (void)prefetch;
@@ -45,15 +47,24 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 + (void)setApproovTokenPrefix:(NSString*)newHeader;
 + (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix;
 + (void)removeSubstitutionHeader:(NSString*)header;
++ (void)addSubstitutionQueryParam:(NSString*)key;
++ (void)removeSubstitutionQueryParam:(NSString*)key;
 + (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
 + (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
 + (void)precheck:(NSError**)error;
-+ (ApproovData*)fetchApproovToken:(NSURLRequest*)request;
++ (ApproovData*)updateRequestWithApproov:(NSURLRequest*)request;
 + (NSDictionary*)getPins:(NSString*)pinType;
++ (void)addExclusionURLRegex:(NSString*)urlRegex;
++ (void)removeExclusionURLRegex:(NSString*)urlRegex;
++ (BOOL)checkURLIsExcluded:(NSURL*)url;
 + (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
      ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry;
 /* The underlying Approov SDK error enum status codes mapped to a NSString */
 + (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
++ (NSString*)getDeviceID;
++ (void)setDataHashInToken:(NSString*)data;
++ (NSString*)getMessageSignature:(NSString*)message;
++ (NSString*)fetchToken:(NSString*)url error:(NSError**)error;
 @end
 
 #endif
