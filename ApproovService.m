@@ -144,6 +144,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
  */
 + (void)prefetch {
     if (approovServiceInitialised){
+        NSLog(@"ApproovService: prefetch");
         // We succeeded initializing Approov SDK, fetch a token
         [Approov fetchApproovToken:^(ApproovTokenFetchResult* result) {
             // Prefetch done, no need to process response
@@ -173,6 +174,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
  */
 + (void)setBindHeader:(NSString*)newHeader {
     @synchronized (bindHeader) {
+        NSLog(@"ApproovService: setBindHeader %@", newHeader);
         bindHeader = newHeader;
     }
 }
@@ -191,6 +193,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
  */
 + (void)setApproovTokenHeader:(NSString*)newHeader {
     @synchronized (approovTokenHeader) {
+        NSLog(@"ApproovService: setApproovTokenHeader %@", newHeader);
         approovTokenHeader = newHeader;
     }
 }
@@ -207,9 +210,10 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
 /* Set approovTokenPrefix content
  *
  */
-+ (void)setApproovTokenPrefix:(NSString*)newHeader {
++ (void)setApproovTokenPrefix:(NSString*)newHeaderPrefix {
     @synchronized (approovTokenPrefix) {
-        approovTokenPrefix = newHeader;
+        NSLog(@"ApproovService: setApproovTokenPrefix %@", newHeaderPrefix);
+        approovTokenPrefix = newHeaderPrefix;
     }
 }
 
@@ -227,6 +231,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
 + (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)requiredPrefix {
     if (approovServiceInitialised){
         @synchronized(substitutionHeaders){
+            NSLog(@"ApproovService: addSubstitutionHeader %@ prefix: %@", header, requiredPrefix);
             if (requiredPrefix == nil) {
                     [substitutionHeaders setValue:@"" forKey:header];
             } else {
@@ -275,7 +280,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
     @synchronized (substitutionQueryParams) {
         if (approovServiceInitialised) {
             [substitutionQueryParams removeObject:key];
-            NSLog(@"ApproovService: addSubstitutionQueryParam: %@", key);
+            NSLog(@"ApproovService: removeSubstitutionQueryParam: %@", key);
         }
     }
 }

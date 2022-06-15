@@ -44,7 +44,7 @@ typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
 + (NSString*)getApproovTokenHeader;
 + (void)setApproovTokenHeader:(NSString*)newHeader;
 + (NSString*)getApproovTokenPrefix;
-+ (void)setApproovTokenPrefix:(NSString*)newHeader;
++ (void)setApproovTokenPrefix:(NSString*)newHeaderPrefix;
 + (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix;
 + (void)removeSubstitutionHeader:(NSString*)header;
 + (void)addSubstitutionQueryParam:(NSString*)key;
