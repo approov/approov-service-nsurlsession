@@ -249,6 +249,7 @@ static NSMutableSet<NSString*>* substitutionQueryParams = nil;
 +(void)removeSubstitutionHeader:(NSString*)header {
     if (approovServiceInitialised){
         @synchronized(substitutionHeaders){
+            NSLog(@"ApproovService: removeSubstitutionHeader %@", header);
             [substitutionHeaders removeObjectForKey:header];
         }
     }
