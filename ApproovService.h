@@ -13,58 +13,43 @@
 // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
 // ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
 // THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #ifndef ApproovService_h
 #define ApproovService_h
 
+#import "ApproovSessionTaskObserver.h"
 #import <Foundation/Foundation.h>
-/* Token fetch decision code */
-typedef NS_ENUM(NSUInteger, ApproovTokenNetworkFetchDecision) {
-    ShouldProceed,
-    ShouldRetry,
-    ShouldFail,
-    ShouldIgnore
-};
 
-/* Approov SDK token fetch return object */
-@interface ApproovData: NSObject
-@property (getter=getRequest)NSURLRequest* request;
-@property (getter=getDecision)ApproovTokenNetworkFetchDecision decision;
-@property (getter=getSdkMessage)NSString* sdkMessage;
-@property NSError* error;
-@end
-
-/* The ApproovService interface wrapper */
-@interface ApproovService : NSObject
+// ApproovService provides a mediation layer to the underlying Approov SDK
+@interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
-+ (void)initialize:(NSString*)configString errorMessage:(NSError**)error;
++ (void)initialize:(NSString *)configString error:(NSError **)error;
 + (void)setProceedOnNetworkFailure:(BOOL)proceed;
-+ (void)setBindHeader:(NSString*)newHeader;
-+ (NSString*)getBindHeader;
++ (void)setBindingHeader:(NSString *)newHeader;
++ (NSString *)getBindingHeader;
++ (void)setApproovTokenHeader:(NSString *)newHeader;
++ (NSString *)getApproovTokenHeader;
++ (void)setApproovTokenPrefix:(NSString *)newHeaderPrefix;
++ (NSString *)getApproovTokenPrefix;
++ (void)addSubstitutionHeader:(NSString *)header requiredPrefix:(NSString *)prefix;
++ (void)removeSubstitutionHeader:(NSString *)header;
++ (void)addSubstitutionQueryParam:(NSString *)key;
++ (void)removeSubstitutionQueryParam:(NSString *)key;
++ (void)addExclusionURLRegex:(NSString *)urlRegex;
++ (void)removeExclusionURLRegex:(NSString *)urlRegex;
 + (void)prefetch;
-+ (NSString*)getApproovTokenHeader;
-+ (void)setApproovTokenHeader:(NSString*)newHeader;
-+ (NSString*)getApproovTokenPrefix;
-+ (void)setApproovTokenPrefix:(NSString*)newHeaderPrefix;
-+ (void)addSubstitutionHeader:(NSString*)header requiredPrefix:(NSString*)prefix;
-+ (void)removeSubstitutionHeader:(NSString*)header;
-+ (void)addSubstitutionQueryParam:(NSString*)key;
-+ (void)removeSubstitutionQueryParam:(NSString*)key;
-+ (NSString*)fetchSecureString:(NSString*)key newDefinition:(NSString*)newDef error:(NSError**)error;
-+ (NSString*)fetchCustomJWT:(NSString*)payload error:(NSError**)error;
-+ (void)precheck:(NSError**)error;
-+ (ApproovData*)updateRequestWithApproov:(NSURLRequest*)request;
-+ (NSDictionary*)getPins:(NSString*)pinType;
-+ (void)addExclusionURLRegex:(NSString*)urlRegex;
-+ (void)removeExclusionURLRegex:(NSString*)urlRegex;
-+ (BOOL)checkURLIsExcluded:(NSURL*)url;
-+ (NSError*)createErrorWithCode:(NSInteger)code userMessage:(NSString*)message ApproovSDKError:(NSString*)sdkError
-     ApproovSDKRejectionReasons:(NSString*)rejectionReasons ApproovSDKARC:(NSString*)arc canRetry:(BOOL)retry;
-/* The underlying Approov SDK error enum status codes mapped to a NSString */
-+ (NSString*)stringFromApproovTokenFetchStatus:(NSUInteger)status;
-+ (NSString*)getDeviceID;
-+ (void)setDataHashInToken:(NSString*)data;
-+ (NSString*)getMessageSignature:(NSString*)message;
-+ (NSString*)fetchToken:(NSString*)url error:(NSError**)error;
++ (void)precheck:(NSError **)error;
++ (NSString *)getDeviceID;
++ (void)setDataHashInToken:(NSString *)data;
++ (NSString *)getMessageSignature:(NSString *)message;
++ (NSString *)fetchToken:(NSString *)url error:(NSError **)error;
++ (NSString *)fetchSecureString:(NSString *)key newDef:(NSString *)newDef error:(NSError **)error;
++ (NSString *)fetchCustomJWT:(NSString*)payload error:(NSError **)error;
++ (NSDictionary *)getPins:(NSString *)pinType;
++ (void)interceptSessionTask:(NSURLSessionTask *)task sessionConfig:(NSURLSessionConfiguration *)sessionConfig
+        completionHandler:(CompletionHandlerType)completionHandler;
++ (NSURLRequest *)updateRequestWithApproov:(NSURLRequest *)request
+        sessionConfig:(NSURLSessionConfiguration *)sessionConfig error:(NSError **)error;
 @end
 
 #endif
