@@ -44,6 +44,10 @@ static const NSString *TAG = @"ApproovService";
         0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05,
         0x00, 0x03, 0x82, 0x01, 0x0f, 0x00
     };
+    const unsigned char rsa3072SPKIHeader[] = {
+        0x30, 0x82, 0x01, 0xa2, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05,
+        0x00, 0x03, 0x82, 0x01, 0x8f, 0x00
+    };
     const unsigned char rsa4096SPKIHeader[] = {
         0x30, 0x82, 0x02, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05,
         0x00, 0x03, 0x82, 0x02, 0x0f, 0x00
@@ -59,6 +63,7 @@ static const NSString *TAG = @"ApproovService";
     self.spkiHeaders = @{
         (NSString *)kSecAttrKeyTypeRSA : @{
               @2048 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa2048SPKIHeader)],
+              @3072 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa3072SPKIHeader)],
               @4096 : [NSData dataWithBytes:rsa4096SPKIHeader length:sizeof(rsa4096SPKIHeader)]
         },
         (NSString *)kSecAttrKeyTypeECSECPrimeRandom : @{
@@ -367,7 +372,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
  * Gets the subject public key info (SPKI) header depending on a public key's type and size.
  *
  * @param publicKey is the public key being analyzed
- * @return NSData* of the coresponding SPKI header that will be used
+ * @return NSData* of the coresponding SPKI header that will be used or nil if there was a problem
  */
 - (NSData *)publicKeyInfoHeaderForKey:(SecKeyRef)publicKey {
     CFDictionaryRef publicKeyAttributes = SecKeyCopyAttributes(publicKey);
@@ -382,7 +387,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
  * Gets a certificate's Subject Public Key Info (SPKI).
  *
  * @param certificate is the certificate being analyzed
- * @return NSData* of the SPKI certificate information
+ * @return NSData* of the SPKI certificate information or nil if there was a problem
  */
 - (NSData *)publicKeyInfoOfCertificate:(SecCertificateRef)certificate {
     // get the public key from the certificate
@@ -440,16 +445,25 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     }
     
     // check the validity of the server cert
-    SecTrustResultType result;
-    OSStatus status = SecTrustEvaluate(serverTrust, &result);
-    if (status != errSecSuccess) {
-        *error = [ApproovPinningURLSessionDelegate createErrorWithCode:SERVER_CERTIFICATE_FAILED_VALIDATION
-            userMessage:@"server certificate validation failed"];
-        return nil;
-    } else if ((result != kSecTrustResultUnspecified) && (result != kSecTrustResultProceed)) {
-        *error = [ApproovPinningURLSessionDelegate createErrorWithCode:SERVER_TRUST_EVALUATION_FAILURE
-            userMessage:@"server trust evaluation failed"];
-        return nil;
+    if (@available(iOS 12.0, *)) {
+        if (!SecTrustEvaluateWithError(serverTrust, nil)) {
+            *error = [ApproovPinningURLSessionDelegate createErrorWithCode:SERVER_CERTIFICATE_FAILED_VALIDATION
+                                                               userMessage:@"server certificate validation failed"];
+            return nil;
+        }
+    }
+    else {
+        SecTrustResultType result;
+        OSStatus status = SecTrustEvaluate(serverTrust, &result);
+        if (status != errSecSuccess) {
+            *error = [ApproovPinningURLSessionDelegate createErrorWithCode:SERVER_CERTIFICATE_FAILED_VALIDATION
+                                                               userMessage:@"server certificate validation failed"];
+            return nil;
+        } else if ((result != kSecTrustResultUnspecified) && (result != kSecTrustResultProceed)) {
+            *error = [ApproovPinningURLSessionDelegate createErrorWithCode:SERVER_TRUST_EVALUATION_FAILURE
+                                                               userMessage:@"server trust evaluation failed"];
+            return nil;
+        }
     }
     
     // get the Approov pins for the host domain
@@ -471,7 +485,9 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     int certCountInChain = (int)SecTrustGetCertificateCount(serverTrust);
     int indexCurrentCert = 0;
     while (indexCurrentCert < certCountInChain) {
-        // get the certificate at the current chain position
+        // get the certificate at the current chain position. This function is deprecated at iOS 15 but the
+        // replacement function is only available from iOS 15 and has a very different interface so we continue
+        // to use this for now
         SecCertificateRef serverCert = SecTrustGetCertificateAtIndex(serverTrust, indexCurrentCert);
         if (serverCert == nil) {
             *error = [ApproovPinningURLSessionDelegate createErrorWithCode:CERTIFICATE_CHAIN_READ_ERROR
@@ -482,24 +498,23 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
         // get the subject public key info from the certificate
         NSData *publicKeyInfo = [self publicKeyInfoOfCertificate:serverCert];
         if (publicKeyInfo == nil) {
-            *error = [ApproovPinningURLSessionDelegate createErrorWithCode:PUBLIC_KEY_INFORMATION_READ_FAILURE
-                userMessage:@"failed reading public key information"];
-            return nil;
+            NSLog(@"%@: host %@ has an unsupported certificate in the chain", TAG, host);
         }
-        
-        // compute the SHA-256 hash of the public key info and base64 encode the result
-        CC_SHA256_CTX shaCtx;
-        CC_SHA256_Init(&shaCtx);
-        CC_SHA256_Update(&shaCtx,(void*)[publicKeyInfo bytes],(unsigned)publicKeyInfo.length);
-        unsigned char publicKeyHash[CC_SHA256_DIGEST_LENGTH] = {'\0',};
-        CC_SHA256_Final(publicKeyHash, &shaCtx);
-        NSString *publicKeyHashBase64 = [[NSData dataWithBytes:publicKeyHash length:CC_SHA256_DIGEST_LENGTH] base64EncodedStringWithOptions:0];
-        
-        // match pins on the receivers host
-        for (NSString *pinHashB64 in pinsForHost) {
-            if ([pinHashB64 isEqualToString:publicKeyHashBase64]) {
-                NSLog(@"%@: %@ matched public key pin %@ from %lu pins", TAG, host, pinHashB64, [pinsForHost count]);
-                return serverTrust;
+        else {
+            // compute the SHA-256 hash of the public key info and base64 encode the result
+            CC_SHA256_CTX shaCtx;
+            CC_SHA256_Init(&shaCtx);
+            CC_SHA256_Update(&shaCtx,(void*)[publicKeyInfo bytes],(unsigned)publicKeyInfo.length);
+            unsigned char publicKeyHash[CC_SHA256_DIGEST_LENGTH] = {'\0',};
+            CC_SHA256_Final(publicKeyHash, &shaCtx);
+            NSString *publicKeyHashBase64 = [[NSData dataWithBytes:publicKeyHash length:CC_SHA256_DIGEST_LENGTH] base64EncodedStringWithOptions:0];
+            
+            // match pins on the receivers host
+            for (NSString *pinHashB64 in pinsForHost) {
+                if ([pinHashB64 isEqualToString:publicKeyHashBase64]) {
+                    NSLog(@"%@: %@ matched public key pin %@ from %lu pins", TAG, host, pinHashB64, [pinsForHost count]);
+                    return serverTrust;
+                }
             }
         }
         
