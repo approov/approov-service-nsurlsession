@@ -63,7 +63,7 @@ static const NSString *TAG = @"ApproovService";
     self.spkiHeaders = @{
         (NSString *)kSecAttrKeyTypeRSA : @{
               @2048 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa2048SPKIHeader)],
-              @3072 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa3072SPKIHeader)],
+              @3072 : [NSData dataWithBytes:rsa3072SPKIHeader length:sizeof(rsa3072SPKIHeader)],
               @4096 : [NSData dataWithBytes:rsa4096SPKIHeader length:sizeof(rsa4096SPKIHeader)]
         },
         (NSString *)kSecAttrKeyTypeECSECPrimeRandom : @{
