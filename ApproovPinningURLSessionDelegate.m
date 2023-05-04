@@ -18,7 +18,7 @@
 #import "ApproovPinningURLSessionDelegate.h"
 #import "ApproovService.h"
 #import <CommonCrypto/CommonCrypto.h>
-
+#import <objc/runtime.h>
 // Declare state to be held on the pinning session delegate instance
 @interface ApproovPinningURLSessionDelegate()
 
@@ -63,7 +63,7 @@ static const NSString *TAG = @"ApproovService";
     self.spkiHeaders = @{
         (NSString *)kSecAttrKeyTypeRSA : @{
               @2048 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa2048SPKIHeader)],
-              @3072 : [NSData dataWithBytes:rsa3072SPKIHeader length:sizeof(rsa3072SPKIHeader)],
+              @3072 : [NSData dataWithBytes:rsa2048SPKIHeader length:sizeof(rsa3072SPKIHeader)],
               @4096 : [NSData dataWithBytes:rsa4096SPKIHeader length:sizeof(rsa4096SPKIHeader)]
         },
         (NSString *)kSecAttrKeyTypeECSECPrimeRandom : @{
@@ -176,6 +176,8 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
  completionHandler:(void (^)(NSURLRequest *))completionHandler {
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:willPerformHTTPRedirection:newRequest:completionHandler:)]) {
         [self.optionalURLDelegate URLSession:session task:task willPerformHTTPRedirection:response newRequest:request completionHandler:completionHandler];
+    } else {
+        completionHandler(request);
     }
 }
 
@@ -215,9 +217,11 @@ willBeginDelayedRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLSessionDelayedRequestDisposition disposition, NSURLRequest *newRequest))completionHandler API_AVAILABLE(ios(11.0)){
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:willBeginDelayedRequest:completionHandler:)]) {
         [self.optionalURLDelegate URLSession:session task:task willBeginDelayedRequest:request completionHandler:completionHandler];
+    } else {
+        completionHandler(NSURLSessionDelayedRequestContinueLoading, request);
     }
 }
-
+ 
 /**
  *  Tells the delegate that the session finished collecting metrics for the task
  *  https://developer.apple.com/documentation/foundation/urlsessiontaskdelegate/1643148-urlsession?language=objc
@@ -229,6 +233,7 @@ didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics {
         [self.optionalURLDelegate URLSession:session task:task didFinishCollectingMetrics:metrics];
     }
 }
+ 
 
 /**
  *  Tells the delegate that the task is waiting until suitable connectivity is available before beginning the network load
@@ -250,7 +255,9 @@ taskIsWaitingForConnectivity:(NSURLSessionTask *)task API_AVAILABLE(ios(11.0)) {
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveResponse:completionHandler:)]) {
-        [self.optionalURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
+      [self.optionalURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
+    } else {
+        completionHandler(NSURLSessionResponseAllow);
     }
 }
 
@@ -265,7 +272,7 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask {
         [self.optionalURLDelegate URLSession:session dataTask:dataTask didBecomeDownloadTask:downloadTask];
     }
 }
-
+ 
 /**
  *  Tells the delegate that the data task was changed to a stream task
  *  https://developer.apple.com/documentation/foundation/urlsessiondatadelegate/1411648-urlsession?language=objc
@@ -300,9 +307,12 @@ willCacheResponse:(NSCachedURLResponse *)proposedResponse
  completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler {
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:willCacheResponse:completionHandler:)]) {
         [self.optionalURLDelegate URLSession:session dataTask:dataTask willCacheResponse:proposedResponse completionHandler:completionHandler];
+    } else {
+        completionHandler(proposedResponse);
     }
 }
 
+ 
 /**
  *  Tells the delegate that a download task has finished downloading
  *  https://developer.apple.com/documentation/foundation/urlsessiondownloaddelegate/1411575-urlsession?language=objc
@@ -314,7 +324,7 @@ didFinishDownloadingToURL:(NSURL *)location {
         [self.optionalURLDelegate URLSession:session downloadTask:downloadTask didFinishDownloadingToURL:location];
     }
 }
-
+ 
 /**
  *  Tells the delegate that the download task has resumed downloading
  *  https://developer.apple.com/documentation/foundation/urlsessiondownloaddelegate/1408142-urlsession?language=objc
@@ -327,7 +337,7 @@ expectedTotalBytes:(int64_t)expectedTotalBytes {
         [self.optionalURLDelegate URLSession:session downloadTask:downloadTask didResumeAtOffset:fileOffset expectedTotalBytes:expectedTotalBytes];
     }
 }
-
+ 
 /**
  *  Periodically informs the delegate about the download’s progress
  *  https://developer.apple.com/documentation/foundation/urlsessiondownloaddelegate/1409408-urlsession?language=objc
@@ -341,7 +351,7 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
         [self.optionalURLDelegate URLSession:session downloadTask:downloadTask didWriteData:bytesWritten totalBytesWritten:totalBytesWritten totalBytesExpectedToWrite:totalBytesExpectedToWrite];
     }
 }
-
+ 
 
 // Error codes related to TLS certificate processing
 typedef NS_ENUM(NSUInteger, SecCertificateRefError)
