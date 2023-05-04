@@ -146,10 +146,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     BOOL respondsToSelector = [self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)];
     SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
-    if (respondsToSelector) {
-        [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
-    } else if (completionHandler != nil) {
-        completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+    if(self.optionalURLDelegate != nil) {
+        if (respondsToSelector) {
+            [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+        } else if (completionHandler != nil) {
+            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+        }
     }
 }
 
@@ -215,10 +217,12 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
               task:(NSURLSessionTask *)task
 willBeginDelayedRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLSessionDelayedRequestDisposition disposition, NSURLRequest *newRequest))completionHandler API_AVAILABLE(ios(11.0)){
-    if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:willBeginDelayedRequest:completionHandler:)]) {
-        [self.optionalURLDelegate URLSession:session task:task willBeginDelayedRequest:request completionHandler:completionHandler];
-    } else {
-        completionHandler(NSURLSessionDelayedRequestContinueLoading, request);
+    if(self.optionalURLDelegate != nil) {
+        if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:willBeginDelayedRequest:completionHandler:)]) {
+            [self.optionalURLDelegate URLSession:session task:task willBeginDelayedRequest:request completionHandler:completionHandler];
+        } else {
+            completionHandler(NSURLSessionDelayedRequestContinueLoading, request);
+        }
     }
 }
  
@@ -254,10 +258,12 @@ taskIsWaitingForConnectivity:(NSURLSessionTask *)task API_AVAILABLE(ios(11.0)) {
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
-    if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveResponse:completionHandler:)]) {
-      [self.optionalURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
-    } else {
-        completionHandler(NSURLSessionResponseAllow);
+    if(self.optionalURLDelegate != nil) {
+        if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:didReceiveResponse:completionHandler:)]) {
+        [self.optionalURLDelegate URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
+        } else {
+            completionHandler(NSURLSessionResponseAllow);
+        }
     }
 }
 
@@ -305,10 +311,12 @@ didBecomeStreamTask:(NSURLSessionStreamTask *)streamTask {
          dataTask:(NSURLSessionDataTask *)dataTask
 willCacheResponse:(NSCachedURLResponse *)proposedResponse
  completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler {
-    if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:willCacheResponse:completionHandler:)]) {
-        [self.optionalURLDelegate URLSession:session dataTask:dataTask willCacheResponse:proposedResponse completionHandler:completionHandler];
-    } else {
-        completionHandler(proposedResponse);
+    if(self.optionalURLDelegate != nil) {
+        if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:dataTask:willCacheResponse:completionHandler:)]) {
+            [self.optionalURLDelegate URLSession:session dataTask:dataTask willCacheResponse:proposedResponse completionHandler:completionHandler];
+        } else {
+            completionHandler(proposedResponse);
+        }
     }
 }
 
