@@ -180,7 +180,22 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 }
 
 /**
- * Get the bindng header.
+ * Sets a development key indicating that the app is a development version and it should
+ * pass attestation even if the app is not registered or it is running on an emulator. The
+ * development key value can be rotated at any point in the account if a version of the app
+ * containing the development key is accidentally released. This is primarily
+ * used for situations where the app package must be modified or resigned in
+ * some way as part of the testing process.
+ *
+ * @param devKey is the development key to be used
+ */
++ (void)setDevKey:(NSString *)devKey {
+    NSLog(@"%@: setDevKey", TAG);
+    [Approov setDevKey:devKey];
+}
+
+/**
+ * Get the binding header.
  *
  * @return the binding headerr
  */
