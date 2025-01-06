@@ -6,16 +6,15 @@ Pod::Spec.new do |s|
       Approov SDK integrates security attestation and secure string fetching for both iOS and watchOS apps.
     DESC
     s.homepage     = "https://approov.io"
-    s.license      = { type: "Commercial", file: "LICENSE" }
     s.authors      = { "CriticalBlue, Ltd." => "support@approov.io" }
-    s.source       = { git: "https://github.com/approov/approov-ios-sdk.git", tag: s.version }
+    s.source       = { :git => "https://github.com/approov/approov-service-nsurlsession.git", :tag => "#{s.version}" }
   
     # Supported platforms
     s.ios.deployment_target = '11.0'
     s.watchos.deployment_target = '7.0'
   
-    # Specify the source code paths for the combined target
-    s.source_files = "Sources/ApproovURLSession/**/*.{swift,h}"
+    # Specify the source code paths for the combined targe
+    s.source_files = 'ApproovNSURLSession.{h,m}', 'ApproovService.{h,m}', 'ApproovPinningURLSessionDelegate.{h,m}', 'ApproovSessionTaskObserver.{h,m}', 'RSSwizzle.{h,m}'
   
     # Vendored frameworks for both iOS and watchOS
     s.vendored_frameworks = 'Approov.xcframework'
