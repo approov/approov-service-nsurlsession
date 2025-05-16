@@ -25,6 +25,7 @@
 - (instancetype)init NS_UNAVAILABLE;
 + (void)initialize:(NSString *)configString error:(NSError **)error;
 + (void)setProceedOnNetworkFailure:(BOOL)proceed;
++ (void)setDevKey:(NSString *)devKey;
 + (void)setBindingHeader:(NSString *)newHeader;
 + (NSString *)getBindingHeader;
 + (void)setApproovTokenHeader:(NSString *)newHeader;
