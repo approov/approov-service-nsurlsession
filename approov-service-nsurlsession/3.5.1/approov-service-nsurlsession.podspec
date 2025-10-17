@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
     s.name         = "approov-service-nsurlsession"
-    s.version      = "3.5.0"
+    s.version      = "3.5.1"
     s.summary      = "Approov mobile attestation SDK"
     s.description  = <<-DESC
       Approov SDK integrates security attestation and secure string fetching for both iOS and watchOS apps.
@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
     # Vendored frameworks for both iOS and watchOS
     s.vendored_frameworks = 'Approov.xcframework'
     s.prepare_command = <<-CMD
-      curl -L https://github.com/approov/approov-ios-sdk/releases/download/3.5.0/Approov.xcframework.zip > Approov.xcframework.zip
+      curl -L https://github.com/approov/approov-ios-sdk/releases/download/3.5.1/Approov.xcframework.zip > Approov.xcframework.zip
       unzip -o Approov.xcframework.zip
       rm -f Approov.xcframework.zip
     CMD
