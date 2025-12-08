@@ -24,6 +24,7 @@
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
 + (void)initialize:(NSString *)configString error:(NSError **)error;
++ (void)setDevKey:(NSString *)devKey;
 + (void)setProceedOnNetworkFailure:(BOOL)proceed;
 + (void)setBindingHeader:(NSString *)newHeader;
 + (NSString *)getBindingHeader;
