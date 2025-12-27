@@ -47,6 +47,8 @@
 + (NSString *)fetchSecureString:(NSString *)key newDef:(NSString *)newDef error:(NSError **)error;
 + (NSString *)fetchCustomJWT:(NSString*)payload error:(NSError **)error;
 + (NSDictionary *)getPins:(NSString *)pinType;
++ (NSString *)getLastARC;
++ (void)setInstallAttrsInToken:(NSString *)attrs;
 + (void)interceptSessionTask:(NSURLSessionTask *)task sessionConfig:(NSURLSessionConfiguration *)sessionConfig
         completionHandler:(CompletionHandlerType)completionHandler;
 + (NSURLRequest *)updateRequestWithApproov:(NSURLRequest *)request
