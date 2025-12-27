@@ -616,6 +616,55 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 }
 
 /**
+ * Gets the last ARC (Attestation Response Code) code.
+ *
+ * NOTE: You MUST only call this method upon succesfull attestation completion. Any networking
+ * errors returned from the service layer will not return a meaningful ARC code if the method is called!!!
+ * @return String ARC from last attestation request or empty string if network unavailable (not used here)
+ */
++ (NSString *)getLastARC {
+    // Get the dynamic pins from Approov
+    NSDictionary<NSString *, NSArray<NSString *> *> *approovPins = [Approov getPins:@"public-key-sha256"];
+    if (approovPins == nil || approovPins.count == 0) {
+        NSLog(@"%@: no host pinning information available", TAG);
+        return;
+    }
+    // The approovPins contains a map of hostnames to pin strings. Skip '*' and use another hostname if available.
+    NSString *hostname = nil;
+    for (NSString *key in approovPins.allKeys) {
+        if (![key isEqualToString:@"*"]) {
+            hostname = key;
+            break;
+        }
+    }
+    if (hostname != nil) {
+        ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:hostname];
+        // Check if a token was fetched successfully and return its arc code
+        if (result.token != nil && result.token.length > 0) {
+            if (result.ARC != nil) {
+                return result.ARC;
+            }
+        }
+    }
+    NSLog(@"%@: no ARC available", TAG);
+    return @"";
+}
+
+/**
+ * Sets an install attributes token to be sent to the server and associated with this particular
+ * app installation for future Approov token fetches. The token must be signed, within its
+ * expiry time and bound to the correct device ID for it to be accepted by the server.
+ * Calling this method ensures that the next call to fetch an Approov
+ * token will not use a cached version, so that this information can be transmitted to the server.
+ *
+ * @param attrs is the signed JWT holding the new install attributes
+ */
++ (void)setInstallAttrsInToken:(NSString *)attrs {
+    NSLog(@"%@: setInstallAttrsInToken", TAG);
+    [Approov setInstallAttrsInToken:attrs];
+}
+
+/**
  * Indicates that the given task, associated with the given configuration, should be intercepted. This means that the initial resume of the task is ignoed but instead
  * used to initiate the process of obaining Approov protection in a background thread. When this completes the request can be updated and the task actually
  * resumed. This avoids blocking execution on the thread that makes the resume call.
