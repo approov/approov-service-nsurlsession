@@ -627,7 +627,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     NSDictionary<NSString *, NSArray<NSString *> *> *approovPins = [Approov getPins:@"public-key-sha256"];
     if (approovPins == nil || approovPins.count == 0) {
         NSLog(@"%@: no host pinning information available", TAG);
-        return;
+        return @"";
     }
     // The approovPins contains a map of hostnames to pin strings. Skip '*' and use another hostname if available.
     NSString *hostname = nil;
