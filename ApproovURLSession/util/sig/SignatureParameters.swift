@@ -133,25 +133,25 @@ public class SignatureParameters: CustomStringConvertible {
         return componentParameters[Self.KEYID] as? String
     }
 
-	/**
-	 * @param keyid the keyid to set
-	 */
-    func setKeyid(_ keyid: String) -> SignatureParameters {
+    /**
+     * @param keyid the keyid to set
+     */
+    public func setKeyid(_ keyid: String) -> SignatureParameters {
         componentParameters[Self.KEYID] = keyid
         return self
     }
 
-	/**
-	 * @return the nonce
-	 */
-    func getNonce() -> String? {
+    /**
+     * @return the nonce
+     */
+    public func getNonce() -> String? {
         return componentParameters[Self.NONCE] as? String
     }
 
-	/**
-	 * @param nonce the nonce to set
-	 */
-    func setNonce(_ nonce: String) -> SignatureParameters {
+    /**
+     * @param nonce the nonce to set
+     */
+    public func setNonce(_ nonce: String) -> SignatureParameters {
         componentParameters[Self.NONCE] = nonce
         return self
     }
@@ -159,14 +159,14 @@ public class SignatureParameters: CustomStringConvertible {
     /**
      * @return the tag
      */
-    func getTag() -> String? {
+    public func getTag() -> String? {
         return componentParameters[Self.TAG] as? String
     }
 
     /**
      * @param tag the tag to set
      */
-    func setTag(_ tag: String) -> SignatureParameters {
+    public func setTag(_ tag: String) -> SignatureParameters {
         componentParameters[Self.TAG] = tag
         return self
     }
@@ -174,11 +174,11 @@ public class SignatureParameters: CustomStringConvertible {
     /**
      * @param key the key for which to get the custom parameter value
      */
-    func getCustomParameter(_ key: String) -> Any? {
+    public func getCustomParameter(_ key: String) -> Any? {
         return componentParameters[key]
     }
 
-    enum SignatureParametersError: Error {
+    public enum SignatureParametersError: Error {
         case invalidType(key: String, expectedType: String)
         case encodingFailed(description: String)
         // case unsupportedParameterType(key: String)
@@ -188,7 +188,7 @@ public class SignatureParameters: CustomStringConvertible {
      * @param key the key for which to set the custom parameter value
      * @param value the value to set for the custom parameter
      */
-    func setCustomParameter(_ key: String, value: Any) throws -> SignatureParameters {
+    public func setCustomParameter(_ key: String, value: Any) throws -> SignatureParameters {
         switch key {
         case Self.ALG:
             guard let stringValue = value as? String else {
