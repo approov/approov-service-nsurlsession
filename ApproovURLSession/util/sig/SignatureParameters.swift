@@ -22,21 +22,21 @@ public class SignatureParameters: CustomStringConvertible {
     // This preserves insertion order
     private var componentParameters: OrderedMap<String, Any> = [:]
 
-	/**
-	 * Default constructor creates an empty SignatureParameters ready to be populated.
-	 */
-    init() {
+    /**
+     * Default constructor creates an empty SignatureParameters ready to be populated.
+     */
+    public init() {
         self.componentIdentifiers = []
         self.componentParameters = [:]
     }
 
     /**
-	 * Copy constructor creates a SignatureParameters instance pre-populated with a copy of all the
-	 * component identifiers and parameters from the provided base.
-	 *
-	 * @param base
-	 */
-    init(base: SignatureParameters) {
+     * Copy constructor creates a SignatureParameters instance pre-populated with a copy of all the
+     * component identifiers and parameters from the provided base.
+     *
+     * @param base
+     */
+    public init(base: SignatureParameters) {
         self.componentIdentifiers = base.componentIdentifiers // Copy the array
         self.componentParameters = base.componentParameters // Copy the dictionary
     }
