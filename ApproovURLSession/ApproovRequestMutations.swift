@@ -32,7 +32,7 @@ public class ApproovRequestMutations {
      *
      * - Returns: The Approov token header key.
      */
-    func getTokenHeaderKey() -> String? {
+    public func getTokenHeaderKey() -> String? {
         return tokenHeaderKey
     }
 
@@ -41,7 +41,7 @@ public class ApproovRequestMutations {
      *
      * - Parameter tokenHeaderKey: The Approov token header key.
      */
-    func setTokenHeaderKey(_ tokenHeaderKey: String) {
+    public func setTokenHeaderKey(_ tokenHeaderKey: String) {
         self.tokenHeaderKey = tokenHeaderKey
     }
 
