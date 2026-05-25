@@ -81,47 +81,47 @@ public class SignatureParameters: CustomStringConvertible {
         self.debugMode = debugMode
     }
 
-	/**
-	 * @return the alg
-	 */
-    func getAlg() -> String? {
+    /**
+     * @return the alg
+     */
+    public func getAlg() -> String? {
         return componentParameters[Self.ALG] as? String
     }
 
-	/**
-	 * @param alg the alg to set
-	 */
-    func setAlg(_ alg: String) -> SignatureParameters {
+    /**
+     * @param alg the alg to set
+     */
+    public func setAlg(_ alg: String) -> SignatureParameters {
         componentParameters[Self.ALG] = alg
         return self
     }
 
-	/**
-	 * @return the created-at time in seconds since epoch
-	 */
-    func getCreated() -> Int64? {
+    /**
+     * @return the created-at time in seconds since epoch
+     */
+    public func getCreated() -> Int64? {
         return componentParameters[Self.CREATED] as? Int64
     }
 
-	/**
-	 * @param created the created-at time to set
-	 */
-    func setCreated(_ created: Int64) -> SignatureParameters {
+    /**
+     * @param created the created-at time to set
+     */
+    public func setCreated(_ created: Int64) -> SignatureParameters {
         componentParameters[Self.CREATED] = created
         return self
     }
 
-	/**
-	 * @return the expires-at time in seconds since epoch
-	 */
-    func getExpires() -> Int64? {
+    /**
+     * @return the expires-at time in seconds since epoch
+     */
+    public func getExpires() -> Int64? {
         return componentParameters[Self.EXPIRES] as? Int64
     }
 
-	/**
-	 * @param expires the expires-at time to set
-	 */
-    func setExpires(_ expires: Int64) -> SignatureParameters {
+    /**
+     * @param expires the expires-at time to set
+     */
+    public func setExpires(_ expires: Int64) -> SignatureParameters {
         componentParameters[Self.EXPIRES] = expires
         return self
     }
