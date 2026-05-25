@@ -129,15 +129,21 @@ extension ComponentProvider {
                     "te", "timing-allow-origin", "trailer", "transfer-encoding", "variant-key", "vary",
                     "x-list", "x-list-a", "x-list-b", "x-xss-protection":
                     // List
-                    if let fieldValue = getField(name: baseIdentifier),
-                       let fieldValueData = fieldValue.data(using: .utf8) {
+                    guard let fieldValue = getField(name: baseIdentifier) else {
+                        throw ComponentProviderError.unknownComponent("Field value for \(baseIdentifier) not found")
+                    }
+                    guard let fieldValueData = fieldValue.data(using: .utf8) else {
+                        throw ComponentProviderError.invalidFieldValue("Field \(baseIdentifier) is not valid UTF-8")
+                    }
+                    do {
                         var parser = StructuredFieldValueParser(fieldValueData)
                         let parsed = try parser.parseListFieldValue()
                         var serializer = StructuredFieldValueSerializer()
                         let serializedValue = try serializer.writeListFieldValue(parsed)
                         return String(data: Data(serializedValue), encoding: .utf8)
+                    } catch {
+                        throw ComponentProviderError.invalidFieldValue("Field \(baseIdentifier) is not a structured field")
                     }
-                    throw ComponentProviderError.invalidFieldValue("Field \(baseIdentifier) is not a structured field")
                 case "alt-svc", "cache-control", "cdn-cache-control", "example-dict", "expect-ct", "keep-alive",
                      "pragma", "prefer", "preference-applied", "priority", "signature", "signature-input",
                      "surrogate-control", "variants", "x-dictionary":
