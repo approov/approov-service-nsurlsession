@@ -50,7 +50,7 @@ public class ApproovRequestMutations {
      *
      * - Returns: The Approov TraceID header key, or nil if the header was not added.
      */
-    func getTraceIDHeaderKey() -> String? {
+    public func getTraceIDHeaderKey() -> String? {
         return traceIDHeaderKey
     }
 
@@ -59,7 +59,7 @@ public class ApproovRequestMutations {
      *
      * - Parameter traceIDHeaderKey: The Approov TraceID header key.
      */
-    func setTraceIDHeaderKey(_ traceIDHeaderKey: String?) {
+    public func setTraceIDHeaderKey(_ traceIDHeaderKey: String?) {
         self.traceIDHeaderKey = traceIDHeaderKey
     }
 
@@ -68,7 +68,7 @@ public class ApproovRequestMutations {
      *
      * - Returns: The list of substituted header keys.
      */
-    func getSubstitutionHeaderKeys() -> [String] {
+    public func getSubstitutionHeaderKeys() -> [String] {
         return substitutionHeaderKeys
     }
 
@@ -77,7 +77,7 @@ public class ApproovRequestMutations {
      *
      * - Parameter substitutionHeaderKeys: The list of substituted header keys.
      */
-    func setSubstitutionHeaderKeys(_ substitutionHeaderKeys: [String]) {
+    public func setSubstitutionHeaderKeys(_ substitutionHeaderKeys: [String]) {
         self.substitutionHeaderKeys = substitutionHeaderKeys
     }
 
@@ -86,7 +86,7 @@ public class ApproovRequestMutations {
      *
      * - Returns: The original URL.
      */
-    func getOriginalURL() -> String? {
+    public func getOriginalURL() -> String? {
         return originalURL
     }
 
@@ -95,7 +95,7 @@ public class ApproovRequestMutations {
      *
      * - Returns: The list of substituted query parameter keys.
      */
-    func getSubstitutionQueryParamKeys() -> [String] {
+    public func getSubstitutionQueryParamKeys() -> [String] {
         return substitutionQueryParamKeys
     }
 
@@ -106,7 +106,7 @@ public class ApproovRequestMutations {
      *   - originalURL: The original URL before substitutions.
      *   - substitutionQueryParamKeys: The list of substituted query parameter keys.
      */
-    func setSubstitutionQueryParamResults(originalURL: String, substitutionQueryParamKeys: [String]) {
+    public func setSubstitutionQueryParamResults(originalURL: String, substitutionQueryParamKeys: [String]) {
         self.originalURL = originalURL
         self.substitutionQueryParamKeys = substitutionQueryParamKeys
     }
