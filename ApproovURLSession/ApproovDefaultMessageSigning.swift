@@ -215,50 +215,63 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
     private static func decodeASN_1_DER_ES256_Signature(_ signature: Data) throws -> Data {
         var offset = 0
 
-        // Ensure the signature starts with a valid ASN.1 sequence
-        guard signature[offset] == 0x30 else {
-            throw ApproovServiceError.permanentError(message: "Invalid ASN.1 DER sequence")
-        }
-        offset += 1
-
-        // Read the total length of the sequence
-        let sequenceLength = Int(signature[offset])
-        offset += 1
-
-        guard sequenceLength == signature.count - 2 else {
-            throw ApproovServiceError.permanentError(message: "Invalid ASN.1 DER sequence length")
+        func require(_ condition: Bool, _ message: String) throws {
+            if !condition {
+                throw ApproovServiceError.permanentError(message: message)
+            }
         }
 
-        // Decode the first integer (r)
-        guard signature[offset] == 0x02 else {
-            throw ApproovServiceError.permanentError(message: "Invalid ASN.1 DER integer for r")
+        func readByte() throws -> UInt8 {
+            try require(offset < signature.count, "Truncated ASN.1 DER signature")
+            let b = signature[offset]
+            offset += 1
+            return b
         }
-        offset += 1
 
-        let rLength = Int(signature[offset])
-        offset += 1
+        // Supports both short-form and long-form lengths.
+        func readLength() throws -> Int {
+            let first = try readByte()
+            if (first & 0x80) == 0 {
+                return Int(first)
+            }
 
+            let octetCount = Int(first & 0x7F)
+            try require(octetCount > 0 && octetCount <= 4, "Unsupported ASN.1 DER length")
+            try require(offset + octetCount <= signature.count, "Truncated ASN.1 DER signature")
+
+            var length = 0
+            for _ in 0..<octetCount {
+                length = (length << 8) | Int(try readByte())
+            }
+            return length
+        }
+
+        // SEQUENCE
+        let sequenceTag = try readByte()
+        try require(sequenceTag == 0x30, "Invalid ASN.1 DER sequence")
+        let sequenceLength = try readLength()
+        try require(offset + sequenceLength == signature.count, "Invalid ASN.1 DER sequence length")
+
+        // r INTEGER
+        let rTag = try readByte()
+        try require(rTag == 0x02, "Invalid ASN.1 DER integer for r")
+        let rLength = try readLength()
+        try require(offset + rLength <= signature.count, "Truncated ASN.1 DER signature")
         let rBytes = signature[offset..<(offset + rLength)]
         offset += rLength
 
-        // Decode the second integer (s)
-        guard signature[offset] == 0x02 else {
-            throw ApproovServiceError.permanentError(message: "Invalid ASN.1 DER integer for s")
-        }
-        offset += 1
-
-        let sLength = Int(signature[offset])
-        offset += 1
-
+        // s INTEGER
+        let sTag = try readByte()
+        try require(sTag == 0x02, "Invalid ASN.1 DER integer for s")
+        let sLength = try readLength()
+        try require(offset + sLength <= signature.count, "Truncated ASN.1 DER signature")
         let sBytes = signature[offset..<(offset + sLength)]
         offset += sLength
 
         // Ensure the entire signature has been processed
-        guard offset == signature.count else {
-            throw ApproovServiceError.permanentError(message: "Extra data in ASN.1 DER signature")
-        }
+        try require(offset == signature.count, "Extra data in ASN.1 DER signature")
 
-        return try to32ByteData(bytes: rBytes) + to32ByteData(bytes: sBytes)
+        return try to32ByteData(bytes: Data(rBytes)) + to32ByteData(bytes: Data(sBytes))
     }
 
     /**
