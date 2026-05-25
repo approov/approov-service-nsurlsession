@@ -41,43 +41,43 @@ public class SignatureParameters: CustomStringConvertible {
         self.componentParameters = base.componentParameters // Copy the dictionary
     }
 
-	/**
-	 * @return the componentIdentifiers
-	 */
-    func getComponentIdentifiers() -> [StringItem] {
+    /**
+     * @return the componentIdentifiers
+     */
+    public func getComponentIdentifiers() -> [StringItem] {
         return componentIdentifiers
     }
 
-	/**
-	 * @return the parameters
-	 */
-    func getParameters() -> OrderedMap<String, Any> {
+    /**
+     * @return the parameters
+     */
+    public func getParameters() -> OrderedMap<String, Any> {
         return componentParameters
     }
 
-	/**
-	 * @param parameters the parameters to set
-	 */
-    func setParameters(_ parameters: OrderedMap<String, Any>) -> SignatureParameters {
+    /**
+     * @param parameters the parameters to set
+     */
+    public func setParameters(_ parameters: OrderedMap<String, Any>) -> SignatureParameters {
         self.componentParameters = parameters
         return self
     }
 
-	/**
-	 * Determine if debug mode has been set for this signature parameters instance
-	 *
-	 * @return true is debug mode is on; false otherwise
-	 */
-    func isDebugMode() -> Bool {
+    /**
+     * Determine if debug mode has been set for this signature parameters instance
+     *
+     * @return true is debug mode is on; false otherwise
+     */
+    public func isDebugMode() -> Bool {
         return debugMode
     }
 
-	/**
-	 * Set the debug mode for this signature parameters
-	 *
-	 * @param debugMode true to enable; false to disable
-	 */
-    func setDebugMode(_ debugMode: Bool) {
+    /**
+     * Set the debug mode for this signature parameters
+     *
+     * @param debugMode true to enable; false to disable
+     */
+    public func setDebugMode(_ debugMode: Bool) {
         self.debugMode = debugMode
     }
 
