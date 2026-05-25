@@ -275,17 +275,17 @@ public class SignatureParameters: CustomStringConvertible {
      * @param identifier the component identifier to check
      * @return true if the component identifier exists; false otherwise
      */
-    func containsComponentIdentifier(_ identifier: String) -> Bool {
+    public func containsComponentIdentifier(_ identifier: String) -> Bool {
         let predicate: (StringItem) -> Bool = { existingIdentifier in
             return existingIdentifier.value == identifier
         }
         return componentIdentifiers.contains(where: predicate)
     }
 
-	/**
-	 * Add a component without parameters.
-	 */
-    func addComponentIdentifier(_ identifier: String) -> SignatureParameters {
+    /**
+     * Add a component without parameters.
+     */
+    public func addComponentIdentifier(_ identifier: String) -> SignatureParameters {
         let normalizedIdentifier = identifier.starts(with: "@") ? identifier : identifier.lowercased()
         let stringItem = StringItem(value: normalizedIdentifier, parameters: [:])
         componentIdentifiers.append(stringItem)
@@ -297,7 +297,7 @@ public class SignatureParameters: CustomStringConvertible {
      * @param identifier the component identifier to check
      * @return true if the component identifier exists; false otherwise
      */
-    func containsComponentIdentifier(_ identifier: StringItem) -> Bool {
+    public func containsComponentIdentifier(_ identifier: StringItem) -> Bool {
         // where predicate: (Element) throws -> Bool
         let predicate: (StringItem) -> Bool = { existingIdentifier in
             return existingIdentifier.value == identifier.value && existingIdentifier.parameters == identifier.parameters
@@ -308,7 +308,7 @@ public class SignatureParameters: CustomStringConvertible {
     /**
      * Add a component with optional parameters. Field components are assumed to be already set to lowercase.
      */
-    func addComponentIdentifier(_ identifier: StringItem) -> SignatureParameters {
+    public func addComponentIdentifier(_ identifier: StringItem) -> SignatureParameters {
         componentIdentifiers.append(identifier)
         return self
     }
