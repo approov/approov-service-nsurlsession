@@ -96,26 +96,30 @@ extension ComponentProvider {
             }
         } else {
             if let keyParameter = componentIdentifier.parameters["key"] {
-                if let fieldValue = getField(name: baseIdentifier),
-                   let fieldValueData = fieldValue.data(using: .utf8) {
-                    // Parse the field as a dictionary
-                    var parser = StructuredFieldValueParser(fieldValueData)
-                    let parsed = try parser.parseDictionaryFieldValue()
-                    if let dictionaryValue = parsed[keyParameter] {
-                        var serializer = StructuredFieldValueSerializer()
-                        switch dictionaryValue {
-                        case .item(let item):
-                            let serializedValue = try serializer.writeItemFieldValue(item)
-                            return String(data: Data(serializedValue), encoding: .utf8)
-                        case .innerList(let innerList):
-                            let itemOrInnerList = ItemOrInnerList.innerList(innerList)
-                            let serializedValue = try serializer.writeListFieldValue([itemOrInnerList])
-                            return String(data: Data(serializedValue), encoding: .utf8)
-                        }
-                    }
+                guard let fieldValue = getField(name: baseIdentifier) else {
                     throw ComponentProviderError.unknownComponent("Field value for \(baseIdentifier) not found")
                 }
-                throw ComponentProviderError.missingParameter("'key' parameter of \(baseIdentifier) is required")
+                guard let fieldValueData = fieldValue.data(using: .utf8) else {
+                    throw ComponentProviderError.invalidFieldValue("Field \(baseIdentifier) is not valid UTF-8")
+                }
+
+                // Parse the field as a dictionary
+                var parser = StructuredFieldValueParser(fieldValueData)
+                let parsed = try parser.parseDictionaryFieldValue()
+                if let dictionaryValue = parsed[keyParameter] {
+                    var serializer = StructuredFieldValueSerializer()
+                    switch dictionaryValue {
+                    case .item(let item):
+                        let serializedValue = try serializer.writeItemFieldValue(item)
+                        return String(data: Data(serializedValue), encoding: .utf8)
+                    case .innerList(let innerList):
+                        let itemOrInnerList = ItemOrInnerList.innerList(innerList)
+                        let serializedValue = try serializer.writeListFieldValue([itemOrInnerList])
+                        return String(data: Data(serializedValue), encoding: .utf8)
+                    }
+                }
+                throw ComponentProviderError.unknownComponent("Field key '\(keyParameter)' for \(baseIdentifier) not found")
+            }
             } else if componentIdentifier.parameters["sf"] != nil {
                 switch (baseIdentifier) {
                 case "accept", "accept-ch", "accept-encoding", "accept-language", "accept-patch", "accept-ranges",
