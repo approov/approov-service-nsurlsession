@@ -122,13 +122,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         NSError* error;
         SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
         if (error != nil) {
-            NSLog(@"%@: pinning check error: %@", TAG, error.localizedDescription);
+            [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pinning check error: %@", TAG, error.localizedDescription];
             completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
         } else if (serverTrust == nil) {
-            NSLog(@"%@: pins rejected", TAG);
+            [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pins rejected", TAG];
             completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
         } else {
-            NSLog(@"%@: pins accepted", TAG);
+            [ApproovService logWithLevel:ApproovLogLevelDebug format:@"%@: pins accepted", TAG];
             completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, NULL);
         }
     } else {
@@ -494,7 +494,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     if (requestURL != nil) {
         NSURLRequest *request = [NSURLRequest requestWithURL:requestURL];
         if (![[ApproovServiceMutatorBridge shared] shouldProcessPinningRequest:request]) {
-            NSLog(@"%@: pinning skipped for %@", TAG, challenge.protectionSpace.host);
+            [ApproovService logWithLevel:ApproovLogLevelInfo format:@"%@: pinning skipped for %@", TAG, challenge.protectionSpace.host];
             return serverTrust;
         }
     }
@@ -510,7 +510,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
 
     // if we are not pinning then we consider this level of trust to be acceptable
     if ((pinsForHost == nil) || [pinsForHost count] == 0) {
-        NSLog(@"%@: host %@ not pinned", TAG, host);
+        [ApproovService logWithLevel:ApproovLogLevelInfo format:@"%@: host %@ not pinned", TAG, host];
         return serverTrust;
     }
     
@@ -531,7 +531,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
         // get the subject public key info from the certificate
         NSData *publicKeyInfo = [self publicKeyInfoOfCertificate:serverCert];
         if (publicKeyInfo == nil) {
-            NSLog(@"%@: host %@ has an unsupported certificate in the chain", TAG, host);
+            [ApproovService logWithLevel:ApproovLogLevelInfo format:@"%@: host %@ has an unsupported certificate in the chain", TAG, host];
         }
         else {
             // compute the SHA-256 hash of the public key info and base64 encode the result
@@ -545,7 +545,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
             // match pins on the receivers host
             for (NSString *pinHashB64 in pinsForHost) {
                 if ([pinHashB64 isEqualToString:publicKeyHashBase64]) {
-                    NSLog(@"%@: %@ matched public key pin %@ from %lu pins", TAG, host, pinHashB64, [pinsForHost count]);
+                    [ApproovService logWithLevel:ApproovLogLevelDebug format:@"%@: %@ matched public key pin %@ from %lu pins", TAG, host, pinHashB64, [pinsForHost count]];
                     return serverTrust;
                 }
             }
@@ -556,7 +556,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     }
     
     // we return nil if no match in current set of pins and certificate chain seen during TLS handshake
-    NSLog(@"%@: pin verification failed for %@ with no match for %lu pins", TAG, host, [pinsForHost count]);
+    [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pin verification failed for %@ with no match for %lu pins", TAG, host, [pinsForHost count]];
     return nil;
 }
 

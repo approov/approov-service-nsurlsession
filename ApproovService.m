@@ -24,12 +24,21 @@
 #else
 #import "approov_service_nsurlsession-Swift.h"
 #endif
+#import <stdarg.h>
 
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @implementation ApproovService
 
 // tag for logging
 static const NSString *TAG = @"ApproovService";
+
+// service layer logging level, defaulting to informational output for backward compatibility
+static ApproovLogLevel loggingLevel = ApproovLogLevelInfo;
+
+#define ApproovLogError(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelError format:(fmt), ##__VA_ARGS__]
+#define ApproovLogWarning(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelWarning format:(fmt), ##__VA_ARGS__]
+#define ApproovLogInfo(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelInfo format:(fmt), ##__VA_ARGS__]
+#define ApproovLogDebug(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelDebug format:(fmt), ##__VA_ARGS__]
 
 // header on which the Approov token is added
 static NSString *approovTokenHeader = @"Approov-Token";
@@ -173,6 +182,40 @@ static BOOL isSessionTaskSwizzled = NO;
     return statusString.uppercaseString;
 }
 
++ (void)setLoggingLevel:(ApproovLogLevel)level {
+    @synchronized(initializerLock) {
+        loggingLevel = level;
+    }
+    ApproovLogInfo(@"%@: setLoggingLevel %ld", TAG, (long)level);
+}
+
++ (ApproovLogLevel)getLoggingLevel {
+    @synchronized(initializerLock) {
+        return loggingLevel;
+    }
+}
+
++ (BOOL)shouldLogAtLevel:(ApproovLogLevel)level {
+    if ((level == ApproovLogLevelOff) || (level < ApproovLogLevelOff) || (level > ApproovLogLevelDebug)) {
+        return NO;
+    }
+    @synchronized(initializerLock) {
+        return loggingLevel >= level;
+    }
+}
+
++ (void)logWithLevel:(ApproovLogLevel)level format:(NSString *)format, ... {
+    if (![ApproovService shouldLogAtLevel:level]) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    NSLog(@"%@", message);
+}
+
 /**
  * Swizzles the NSURLSessionTask resume method that is called when a task is to be transitioned
  * from its initial suspended state into the running state. This provides an opportunity to intercept (and
@@ -225,7 +268,7 @@ static BOOL isSessionTaskSwizzled = NO;
                 initialConfigString = normalizedConfigString;
                 isInitialized = YES;
                 isApproovEnabled = NO;
-                NSLog(@"%@: initialized without Approov SDK protection", TAG);
+                ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
             }
             return;
         }
@@ -251,7 +294,7 @@ static BOOL isSessionTaskSwizzled = NO;
         NSError *localError = nil;
         [Approov initialize:normalizedConfigString updateConfig:@"auto" comment:comment error:&localError];
         if (localError != nil) {
-            NSLog(@"%@: Error initializing Approov SDK: %@", TAG, localError.localizedDescription);
+            ApproovLogError(@"%@: Error initializing Approov SDK: %@", TAG, localError.localizedDescription);
             if (error != nil) {
                 *error = [ApproovService createErrorWithType:@"general" message:localError.localizedDescription];
             }
@@ -300,7 +343,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setProceedOnNetworkFailure:(BOOL)proceed {
     @synchronized(initializerLock) {
-        NSLog(@"%@: setProceedOnNetworkFailure %@", TAG, proceed ? @"YES" : @"NO");
+        ApproovLogDebug(@"%@: setProceedOnNetworkFailure %@", TAG, proceed ? @"YES" : @"NO");
         proceedOnNetworkFail = proceed;
     }
 }
@@ -319,7 +362,7 @@ static BOOL isSessionTaskSwizzled = NO;
     if (!isApproovEnabled) {
         return;
     }
-    NSLog(@"%@: setDevKey", TAG);
+    ApproovLogDebug(@"%@: setDevKey", TAG);
     [Approov setDevKey:devKey];
 }
 
@@ -341,7 +384,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setBindingHeader:(NSString *)header {
     @synchronized(bindingHeader) {
-        NSLog(@"%@: setBindingHeader %@", TAG, header);
+        ApproovLogDebug(@"%@: setBindingHeader %@", TAG, header);
         bindingHeader = header;
     }
 }
@@ -364,7 +407,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setApproovTokenHeader:(NSString *)header {
     @synchronized(approovTokenHeader) {
-        NSLog(@"%@: setApproovTokenHeader %@", TAG, header);
+        ApproovLogDebug(@"%@: setApproovTokenHeader %@", TAG, header);
         approovTokenHeader = header;
     }
 }
@@ -387,7 +430,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setApproovTokenPrefix:(NSString *)prefix {
     @synchronized(approovTokenPrefix) {
-        NSLog(@"%@: setApproovTokenPrefix %@", TAG, prefix);
+        ApproovLogDebug(@"%@: setApproovTokenPrefix %@", TAG, prefix);
         approovTokenPrefix = prefix;
     }
 }
@@ -410,7 +453,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setApproovTraceIDHeader:(NSString *)header {
     @synchronized(approovTraceIDHeader) {
-        NSLog(@"%@: setApproovTraceIDHeader %@", TAG, header);
+        ApproovLogDebug(@"%@: setApproovTraceIDHeader %@", TAG, header);
         approovTraceIDHeader = header ?: @"";
     }
 }
@@ -428,7 +471,7 @@ static BOOL isSessionTaskSwizzled = NO;
 + (void)addSubstitutionHeader:(NSString *)header requiredPrefix:(NSString *)requiredPrefix {
     if (isInitialized){
         @synchronized(substitutionHeaders){
-            NSLog(@"%@: addSubstitutionHeader %@, prefix: %@", TAG, header, requiredPrefix);
+            ApproovLogDebug(@"%@: addSubstitutionHeader %@, prefix: %@", TAG, header, requiredPrefix);
             if (requiredPrefix == nil) {
                     [substitutionHeaders setValue:@"" forKey:header];
             } else {
@@ -446,7 +489,7 @@ static BOOL isSessionTaskSwizzled = NO;
 + (void)removeSubstitutionHeader:(NSString *)header {
     if (isInitialized){
         @synchronized(substitutionHeaders){
-            NSLog(@"%@: removeSubstitutionHeader %@", TAG, header);
+            ApproovLogDebug(@"%@: removeSubstitutionHeader %@", TAG, header);
             [substitutionHeaders removeObjectForKey:header];
         }
     }
@@ -464,7 +507,7 @@ static BOOL isSessionTaskSwizzled = NO;
     @synchronized (substitutionQueryParams) {
         if (isInitialized) {
             [substitutionQueryParams addObject:key];
-            NSLog(@"%@: addSubstitutionQueryParam: %@", TAG, key);
+            ApproovLogDebug(@"%@: addSubstitutionQueryParam: %@", TAG, key);
         }
     }
 }
@@ -478,7 +521,7 @@ static BOOL isSessionTaskSwizzled = NO;
     @synchronized (substitutionQueryParams) {
         if (isInitialized) {
             [substitutionQueryParams removeObject:key];
-            NSLog(@"%@: removeSubstitutionQueryParam: %@", TAG, key);
+            ApproovLogDebug(@"%@: removeSubstitutionQueryParam: %@", TAG, key);
         }
     }
 }
@@ -502,7 +545,7 @@ static BOOL isSessionTaskSwizzled = NO;
     @synchronized (exclusionURLRegexs) {
         if (isInitialized){
             [exclusionURLRegexs addObject:urlRegex];
-            NSLog(@"%@: addExclusionURLRegex: %@", TAG, urlRegex);
+            ApproovLogDebug(@"%@: addExclusionURLRegex: %@", TAG, urlRegex);
         }
     }
     
@@ -517,7 +560,7 @@ static BOOL isSessionTaskSwizzled = NO;
     @synchronized (exclusionURLRegexs) {
         if (isInitialized) {
             [exclusionURLRegexs removeObject:urlRegex];
-            NSLog(@"%@: removeExclusionURLRegex: %@", TAG, urlRegex);
+            ApproovLogDebug(@"%@: removeExclusionURLRegex: %@", TAG, urlRegex);
         }
     }
 }
@@ -530,12 +573,12 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)prefetch {
     if (isApproovEnabled) {
-        NSLog(@"%@: prefetch", TAG);
+        ApproovLogDebug(@"%@: prefetch", TAG);
         [Approov fetchApproovToken:^(ApproovTokenFetchResult *result) {
             if (result.status == ApproovTokenFetchStatusUnknownURL)
-                NSLog(@"%@: prefetch: success", TAG);
+                ApproovLogInfo(@"%@: prefetch: success", TAG);
             else
-                NSLog(@"%@: prefetch: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+                ApproovLogInfo(@"%@: prefetch: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
         }:@"approov.io"];
     }
 }
@@ -554,9 +597,9 @@ static BOOL isSessionTaskSwizzled = NO;
     }
     ApproovTokenFetchResult *result = [Approov fetchSecureStringAndWait:@"precheck-dummy-key" :nil];
     if (result.status == ApproovTokenFetchStatusUnknownKey)
-        NSLog(@"%@: precheck: success", TAG);
+        ApproovLogInfo(@"%@: precheck: success", TAG);
     else
-        NSLog(@"%@: precheck: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+        ApproovLogInfo(@"%@: precheck: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected){
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"precheck rejection: %@ %@",
@@ -595,9 +638,9 @@ static BOOL isSessionTaskSwizzled = NO;
     }
     NSString* deviceID = [Approov getDeviceID];
     if (deviceID != nil)
-        NSLog(@"%@: getDeviceID %@", TAG, deviceID);
+        ApproovLogDebug(@"%@: getDeviceID %@", TAG, deviceID);
     else
-        NSLog(@"%@: getDeviceID error", TAG);
+        ApproovLogError(@"%@: getDeviceID error", TAG);
     return deviceID;
 }
 
@@ -614,7 +657,7 @@ static BOOL isSessionTaskSwizzled = NO;
     if (!isApproovEnabled) {
         return;
     }
-    NSLog(@"%@: setDataHashInToken", TAG);
+    ApproovLogDebug(@"%@: setDataHashInToken", TAG);
     [Approov setDataHashInToken:data];
 }
 
@@ -636,7 +679,7 @@ static BOOL isSessionTaskSwizzled = NO;
         return nil;
     }
     ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:url];
-    NSLog(@"%@: fetchToken for %@: %@", TAG, url, result.loggableToken);
+    ApproovLogInfo(@"%@: fetchToken for %@: %@", TAG, url, result.loggableToken);
     if ((result.status == ApproovTokenFetchStatusNoNetwork) ||
         (result.status == ApproovTokenFetchStatusPoorNetwork) ||
         (result.status == ApproovTokenFetchStatusMITMDetected)) {
@@ -672,7 +715,7 @@ static BOOL isSessionTaskSwizzled = NO;
     if (!isApproovEnabled) {
         return nil;
     }
-    NSLog(@"%@: getAccountMessageSignature", TAG);
+    ApproovLogDebug(@"%@: getAccountMessageSignature", TAG);
     return [Approov getMessageSignature:message];
 }
 
@@ -686,7 +729,7 @@ static BOOL isSessionTaskSwizzled = NO;
     if (!isApproovEnabled) {
         return nil;
     }
-    NSLog(@"%@: getInstallMessageSignature", TAG);
+    ApproovLogDebug(@"%@: getInstallMessageSignature", TAG);
     return [Approov getInstallMessageSignature:message];
 }
 
@@ -697,7 +740,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setMessageSigningMode:(ApproovMessageSigningMode)mode {
     @synchronized(initializerLock) {
-        NSLog(@"%@: setMessageSigningMode %ld", TAG, (long)mode);
+        ApproovLogDebug(@"%@: setMessageSigningMode %ld", TAG, (long)mode);
         messageSigningMode = mode;
     }
 }
@@ -720,7 +763,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setMessageSigningBodyDigestEnabled:(BOOL)enabled {
     @synchronized(initializerLock) {
-        NSLog(@"%@: setMessageSigningBodyDigestEnabled %@", TAG, enabled ? @"YES" : @"NO");
+        ApproovLogDebug(@"%@: setMessageSigningBodyDigestEnabled %@", TAG, enabled ? @"YES" : @"NO");
         messageSigningBodyDigestEnabled = enabled;
     }
 }
@@ -743,7 +786,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setMessageSigningBodyDigestRequired:(BOOL)required {
     @synchronized(initializerLock) {
-        NSLog(@"%@: setMessageSigningBodyDigestRequired %@", TAG, required ? @"YES" : @"NO");
+        ApproovLogDebug(@"%@: setMessageSigningBodyDigestRequired %@", TAG, required ? @"YES" : @"NO");
         messageSigningBodyDigestRequired = required;
     }
 }
@@ -767,7 +810,7 @@ static BOOL isSessionTaskSwizzled = NO;
  */
 + (void)setUseApproovStatusIfNoToken:(BOOL)shouldUse {
     @synchronized(initializerLock) {
-        NSLog(@"%@: setUseApproovStatusIfNoToken %@", TAG, shouldUse ? @"YES" : @"NO");
+        ApproovLogDebug(@"%@: setUseApproovStatusIfNoToken %@", TAG, shouldUse ? @"YES" : @"NO");
         useApproovStatusIfNoToken = shouldUse;
     }
 }
@@ -822,7 +865,7 @@ static BOOL isSessionTaskSwizzled = NO;
     
     // fetch any secure string keyed by the value, catching any exceptions the SDK might throw
     ApproovTokenFetchResult *result = [Approov fetchSecureStringAndWait:key :newDef];
-    NSLog(@"%@: fetchSecureString %@: %@", TAG, type, [Approov stringFromApproovTokenFetchStatus:result.status]);
+    ApproovLogInfo(@"%@: fetchSecureString %@: %@", TAG, type, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"fetchSecureString rejection: %@ %@",
@@ -866,7 +909,7 @@ static BOOL isSessionTaskSwizzled = NO;
         return nil;
     }
     ApproovTokenFetchResult* result = [Approov fetchCustomJWTAndWait:payload];
-    NSLog(@"%@: fetchCustomJWT %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+    ApproovLogInfo(@"%@: fetchCustomJWT %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"fetchCustomJWT rejection: %@ %@",
@@ -926,7 +969,7 @@ static BOOL isSessionTaskSwizzled = NO;
     // Get the dynamic pins from Approov
     NSDictionary<NSString *, NSArray<NSString *> *> *approovPins = [Approov getPins:@"public-key-sha256"];
     if (approovPins == nil || approovPins.count == 0) {
-        NSLog(@"%@: no host pinning information available", TAG);
+        ApproovLogInfo(@"%@: no host pinning information available", TAG);
         return @"";
     }
     // The approovPins contains a map of hostnames to pin strings. Skip '*' and use another hostname if available.
@@ -946,7 +989,7 @@ static BOOL isSessionTaskSwizzled = NO;
             }
         }
     }
-    NSLog(@"%@: no ARC available", TAG);
+    ApproovLogInfo(@"%@: no ARC available", TAG);
     return @"";
 }
 
@@ -963,7 +1006,7 @@ static BOOL isSessionTaskSwizzled = NO;
     if (!isApproovEnabled) {
         return;
     }
-    NSLog(@"%@: setInstallAttrsInToken", TAG);
+    ApproovLogDebug(@"%@: setInstallAttrsInToken", TAG);
     [Approov setInstallAttrsInToken:attrs];
 }
 
@@ -1030,7 +1073,7 @@ static BOOL isSessionTaskSwizzled = NO;
     // get the URL host domain
     NSString *host = request.URL.host;
     if (host == nil) {
-        NSLog(@"%@: request domain was missing or invalid", TAG);
+        ApproovLogInfo(@"%@: request domain was missing or invalid", TAG);
         return request;
     }
 
@@ -1038,13 +1081,13 @@ static BOOL isSessionTaskSwizzled = NO;
     // during development
     NSString *url = request.URL.absoluteString;
     if ([host isEqualToString:@"localhost"]) {
-        NSLog(@"%@: localhost forwarded: %@", TAG, url);
+        ApproovLogInfo(@"%@: localhost forwarded: %@", TAG, url);
         return request;
     }
 
     // if the Approov SDK is not active then we just return immediately without making any changes
     if (!isApproovEnabled) {
-        NSLog(@"%@: unprotected service forwarded: %@", TAG, url);
+        ApproovLogInfo(@"%@: unprotected service forwarded: %@", TAG, url);
         return request;
     }
 
@@ -1061,7 +1104,7 @@ static BOOL isSessionTaskSwizzled = NO;
         if (!error) {
             NSTextCheckingResult *match = [regex firstMatchInString:url options:0 range:NSMakeRange(0, [url length])];
             if (match) {
-                NSLog(@"%@: excluded url: %@", TAG, url);
+                ApproovLogInfo(@"%@: excluded url: %@", TAG, url);
                 return request;
             }
         }
@@ -1075,19 +1118,19 @@ static BOOL isSessionTaskSwizzled = NO;
                                                                sessionConfig:sessionConfig];
             if (headerValue != nil) {
                 [Approov setDataHashInToken:headerValue];
-                NSLog(@"%@: setting data hash for binding header %@", TAG, bindingHeader);
+                ApproovLogDebug(@"%@: setting data hash for binding header %@", TAG, bindingHeader);
             }
         }
     }
 
     // fetch the Approov token and log the result
     ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:url];
-    NSLog(@"%@: token for %@: %@", TAG, host, [result loggableToken]);
+    ApproovLogInfo(@"%@: token for %@: %@", TAG, host, [result loggableToken]);
 
     // log if a configuration update is received and call fetchConfig to clear the update state
     if (result.isConfigChanged) {
         [Approov fetchConfig];
-        NSLog(@"%@: dynamic configuration update received", TAG);
+        ApproovLogInfo(@"%@: dynamic configuration update received", TAG);
     }
 
     // copy request into a form were it can be updated
@@ -1214,7 +1257,7 @@ static BOOL isSessionTaskSwizzled = NO;
             // the request contains the header we want to replace
             result = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
             status = [result status];
-            NSLog(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+            ApproovLogInfo(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the header value with the actual secret
@@ -1275,7 +1318,7 @@ static BOOL isSessionTaskSwizzled = NO;
             NSString *matchText = [url substringWithRange:[match rangeAtIndex:1]];
             result = [Approov fetchSecureStringAndWait:matchText :nil];
             status = [result status];
-            NSLog(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
+            ApproovLogInfo(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the URL with the actual secret

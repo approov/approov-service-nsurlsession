@@ -26,6 +26,14 @@ typedef NS_ENUM(NSInteger, ApproovMessageSigningMode) {
     ApproovMessageSigningModeAccount,
 };
 
+typedef NS_ENUM(NSInteger, ApproovLogLevel) {
+    ApproovLogLevelOff = 0,
+    ApproovLogLevelError,
+    ApproovLogLevelWarning,
+    ApproovLogLevelInfo,
+    ApproovLogLevelDebug,
+};
+
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
@@ -33,6 +41,10 @@ typedef NS_ENUM(NSInteger, ApproovMessageSigningMode) {
 + (void)initialize:(NSString *)configString comment:(NSString *)comment error:(NSError **)error;
 + (BOOL)isInitialized;
 + (BOOL)isApproovEnabled;
++ (void)setLoggingLevel:(ApproovLogLevel)level;
++ (ApproovLogLevel)getLoggingLevel;
++ (BOOL)shouldLogAtLevel:(ApproovLogLevel)level NS_SWIFT_NAME(shouldLog(at:));
++ (void)logWithLevel:(ApproovLogLevel)level format:(NSString *)format, ... NS_FORMAT_FUNCTION(2, 3);
 + (void)setProceedOnNetworkFailure:(BOOL)proceed;
 + (void)setDevKey:(NSString *)devKey;
 + (void)setBindingHeader:(NSString *)newHeader;

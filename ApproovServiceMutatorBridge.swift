@@ -53,7 +53,9 @@ import Foundation
                 _ = try factory.setBodyDigestConfig(nil, required: false)
             }
         } catch {
-            NSLog("[ApproovServiceMutatorBridge] Error configuring body digest: %@", error.localizedDescription)
+            if ApproovService.shouldLog(at: .error) {
+                NSLog("[ApproovServiceMutatorBridge] Error configuring body digest: %@", error.localizedDescription)
+            }
         }
         _ = defaultMessageSigner.setDefaultFactory(factory)
     }
@@ -138,7 +140,9 @@ import Foundation
             request.timeoutInterval = processedRequest.timeoutInterval
             request.allHTTPHeaderFields = processedRequest.allHTTPHeaderFields
         } catch {
-            NSLog("[ApproovServiceMutatorBridge] Error processing request: %@", error.localizedDescription)
+            if ApproovService.shouldLog(at: .error) {
+                NSLog("[ApproovServiceMutatorBridge] Error processing request: %@", error.localizedDescription)
+            }
         }
     }
 
@@ -148,7 +152,9 @@ import Foundation
 
     @objc public func handleInterceptorFetchTokenResult(_ result: Any, url: String, errorPointer: NSErrorPointer) -> Bool {
         guard let fetchResult = result as? ApproovTokenFetchResult else {
-            NSLog("[ApproovServiceMutatorBridge] Invalid result type passed to handleInterceptorFetchTokenResult")
+            if ApproovService.shouldLog(at: .error) {
+                NSLog("[ApproovServiceMutatorBridge] Invalid result type passed to handleInterceptorFetchTokenResult")
+            }
             return false
         }
 

@@ -25,6 +25,16 @@ NSAssert(![ApproovService isApproovEnabled], @"Approov should be disabled");
 
 Empty-config bypass performs no token injection, trace headers, message signing, secure string substitution, secure string fetches, custom JWT fetches, or dynamic pinning.
 
+## Logging
+
+Set the service-layer logging level before sending requests:
+
+```objective-c
+[ApproovService setLoggingLevel:ApproovLogLevelError];
+```
+
+Available levels are `ApproovLogLevelOff`, `ApproovLogLevelError`, `ApproovLogLevelWarning`, `ApproovLogLevelInfo`, and `ApproovLogLevelDebug`. The default is `ApproovLogLevelInfo`, which keeps request outcome diagnostics visible while suppressing debug-level configuration chatter. Use `ApproovLogLevelDebug` for development evidence when you need configuration, substitution, token-fetch, and pin-matching diagnostics. Use `ApproovLogLevelError` or `ApproovLogLevelOff` when routine request diagnostics should not appear in production logs.
+
 ## Creating a Protected Session
 
 Use `ApproovNSURLSession` anywhere you would normally create an `NSURLSession` for protected API traffic:

@@ -183,4 +183,6 @@ Legacy names such as `setApproovInterceptorExtensions` or `setServiceMutator` fr
 
 ### Logging
 
-This NSURLSession service layer does not expose a separate `setLogLevel` or `setLoggingLevel` wrapper. Use native SDK/account diagnostics and platform logging controls when deeper SDK logging is required.
+The service layer exposes `+setLoggingLevel:` and `+getLoggingLevel` to control service-layer diagnostics independently from SDK/account diagnostics. Supported levels are `ApproovLogLevelOff`, `ApproovLogLevelError`, `ApproovLogLevelWarning`, `ApproovLogLevelInfo`, and `ApproovLogLevelDebug`.
+
+The default is `ApproovLogLevelInfo`, which keeps request outcome diagnostics visible while suppressing debug-level configuration chatter. Set `ApproovLogLevelError` or `ApproovLogLevelOff` in production when routine token, substitution, and pinning diagnostics should be suppressed. Set `ApproovLogLevelDebug` only for development or integration evidence because it includes configuration changes and detailed pin matching events.
