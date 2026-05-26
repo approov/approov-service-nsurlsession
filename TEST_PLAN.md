@@ -11,7 +11,7 @@ Relevant source areas:
 - `ApproovService.h` and `ApproovService.m`
 - `ApproovNSURLSession.h` and `ApproovNSURLSession.m`
 - `ApproovPinningURLSessionDelegate.h` and `ApproovPinningURLSessionDelegate.m`
-- `ApproovURLSession/*.swift`
+- `ApproovNSURLSessionSwift/*.swift`
 - `ApproovServiceMutatorBridge.swift`
 - `tests/ios/native/*`
 - `tests/ios/swift/*`

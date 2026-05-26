@@ -23,7 +23,7 @@ Pod::Spec.new do |s|
       'ApproovSessionTaskObserver.{h,m}',
       'RSSwizzle.{h,m}',
       'ApproovServiceMutatorBridge.swift',
-      'ApproovURLSession/**/*.{swift}'
+      'ApproovNSURLSessionSwift/**/*.{swift}'
     ]
     s.swift_version = '5.0'
     s.static_framework = true
