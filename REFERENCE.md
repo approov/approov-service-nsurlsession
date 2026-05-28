@@ -33,6 +33,10 @@ Passing an empty config string enters empty-config bypass mode. In this mode `is
 
 An empty-config bootstrap may later be upgraded by calling `initialize` again with a valid non-empty config string. If a non-empty initialization fails after an empty-config bypass, the service layer becomes uninitialized. Callers must re-initialize before using the service layer again.
 
+### Re-initialization advisory
+
+Once the service layer is initialized with a valid configuration, re-initializing with the same configuration is unnecessary. The native SDK is a process singleton and its state does not change on repeated same-config calls. Calling `initialize:` while requests are in flight resets the service layer's substitution headers, exclusion URLs, and task observer, which may cause concurrent requests to lose header substitutions or to proceed without an Approov token. The one intended upgrade path is from empty-config bypass mode to a valid configuration — for example, when a configuration string becomes available after app launch. This transition is safe because no tasks are tracked and no swizzle is in place during bypass mode.
+
 ### `+isInitialized`
 
 Returns whether the service layer has completed initialization. This returns true for both active Approov protection and empty-config bypass mode.
