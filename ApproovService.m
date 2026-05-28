@@ -244,23 +244,14 @@ static BOOL isSessionTaskSwizzled = NO;
  * @param configString is the string to be used for initialization
  * @param error is populated with an error if there was a problem during initialization, or nil if not required
  */
-+ (void)initialize:(NSString *)configString error:(NSError **)error {
++ (void)initialize:(NSString * _Nonnull)configString error:(NSError **)error {
     [ApproovService initialize:configString comment:nil error:error];
 }
 
-+ (void)initialize:(NSString *)configString comment:(NSString *)comment error:(NSError **)error {
++ (void)initialize:(NSString * _Nonnull)configString comment:(NSString *)comment error:(NSError **)error {
     @synchronized(initializerLock) {
         if (error != nil) {
             *error = nil;
-        }
-
-        // nil config is accepted but treated as empty (bypass mode). Log a warning so callers
-        // can migrate to passing @"" explicitly. comment is passed through to the native SDK
-        // unchanged — nil and @"" are semantically distinct at the SDK level.
-        NSString *effectiveConfig = configString;
-        if (effectiveConfig == nil) {
-            ApproovLogWarning(@"%@: nil config passed to initialize; treating as empty string for bypass mode. Pass @\"\" explicitly.", TAG);
-            effectiveConfig = @"";
         }
 
         // Reset service layer state
@@ -276,9 +267,9 @@ static BOOL isSessionTaskSwizzled = NO;
         // The SDK returns YES if initialization succeeded, NO if already initialized
         // with the same config even by another service layer instance. Any other
         // failure surfaces as localError.
-        if (effectiveConfig.length > 0) {
+        if (configString.length > 0) {
             NSError *localError = nil;
-            BOOL sdkInitialized = [Approov initialize:effectiveConfig updateConfig:@"auto"
+            BOOL sdkInitialized = [Approov initialize:configString updateConfig:@"auto"
                                               comment:comment error:&localError];
             if (localError != nil) {
                 ApproovLogError(@"%@: Approov initialization failed: %@", TAG, localError.localizedDescription);
@@ -300,9 +291,9 @@ static BOOL isSessionTaskSwizzled = NO;
             ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
         }
 
-        initialConfigString = effectiveConfig;
+        initialConfigString = configString;
         isInitialized = YES;
-        isApproovEnabled = (effectiveConfig.length > 0);
+        isApproovEnabled = (configString.length > 0);
     }
 }
 

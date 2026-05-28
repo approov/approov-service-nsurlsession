@@ -37,8 +37,8 @@ typedef NS_ENUM(NSInteger, ApproovLogLevel) {
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
-+ (void)initialize:(NSString *)configString error:(NSError **)error;
-+ (void)initialize:(NSString *)configString comment:(NSString *)comment error:(NSError **)error;
++ (void)initialize:(NSString * _Nonnull)configString error:(NSError **)error;
++ (void)initialize:(NSString * _Nonnull)configString comment:(NSString *)comment error:(NSError **)error;
 + (BOOL)isInitialized;
 + (BOOL)isApproovEnabled;
 + (void)setLoggingLevel:(ApproovLogLevel)level;

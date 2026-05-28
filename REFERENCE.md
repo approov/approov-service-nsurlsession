@@ -25,7 +25,7 @@ if (error != nil) {
 }
 ```
 
-**`config` parameter:** Pass a non-empty Approov configuration string for full SDK protection, or `@""` for empty-config bypass mode. Passing `nil` is accepted and treated as `@""` (bypass mode); a warning is logged and callers should migrate to passing `@""` explicitly.
+**`config` parameter:** Pass a non-empty Approov configuration string for full SDK protection, or `@""` for empty-config bypass mode. The parameter is `_Nonnull`; passing `nil` is a compile-time error.
 
 **`comment` parameter:** Forwarded to the native SDK as-is. `nil` and `@""` are semantically distinct at the native SDK level and must not be substituted for each other. Pass `nil` for a standard initialization. Use a `reinit...` comment for supported runtime re-initialization flows.
 
