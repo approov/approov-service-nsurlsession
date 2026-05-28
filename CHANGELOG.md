@@ -36,3 +36,5 @@
 - Fixed service-layer behavior so allowed failure/status responses can be surfaced consistently when token generation does not return a normal Approov token.
 - Fixed logging behavior so NSURLSession exposes the same practical log level controls as the URLSession service layer.
 - Fixed Swift support packaging after removing the legacy `ApproovURLSession` folder.
+- Fixed RSA-3072 SPKI header construction: `rsa2048SPKIHeader` bytes were incorrectly used instead of `rsa3072SPKIHeader`, producing corrupt SPKI data for any RSA-3072 certificate and causing silent pinning failures for that key type.
+- Fixed substitution header loop reading `prefix` from the original unlocked `substitutionHeaders` dictionary instead of from the already-captured thread-safe copy `subsHeaders`, eliminating a potential data race during concurrent `addSubstitutionHeader:` calls.

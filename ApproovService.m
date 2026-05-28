@@ -1224,7 +1224,7 @@ static BOOL isSessionTaskSwizzled = NO;
     // we now deal with any header substitutions, which may require further fetches but these
     // should be using cached results
     for (NSString *header in subsHeaders) {
-        NSString *prefix = [substitutionHeaders objectForKey:header];
+        NSString *prefix = [subsHeaders objectForKey:header];
         NSString *value = [ApproovService valueForHTTPHeaderField:header
                                                         inRequest:request
                                                      sessionConfig:sessionConfig];
