@@ -68,8 +68,7 @@ static BOOL isApproovEnabled = NO;
 // original config string used during initialization
 static NSString *initialConfigString = nil;
 
-// should we proceed with network request in case of network failure
-static BOOL proceedOnNetworkFail = NO;
+// proceedOnNetworkFail has been removed; network failures are always fail-closed via the mutator
 
 // if enabled and no Approov token is available, send the token fetch status in the token header
 static BOOL useApproovStatusIfNoToken = NO;
@@ -255,67 +254,55 @@ static BOOL isSessionTaskSwizzled = NO;
             *error = nil;
         }
 
-        NSString *normalizedConfigString = configString ?: @"";
-
-        // initialize headers map, exclusion dictionary and query parameters set
-        if (substitutionHeaders == nil) substitutionHeaders = [[NSMutableDictionary alloc] init];
-        if (exclusionURLRegexs == nil) exclusionURLRegexs = [[NSMutableSet alloc] init];
-        if (substitutionQueryParams == nil) substitutionQueryParams = [[NSMutableSet alloc] init];
-
-        // empty configuration starts, or keeps, a disabled bypass mode
-        if (normalizedConfigString.length == 0) {
-            if (!isInitialized) {
-                initialConfigString = normalizedConfigString;
-                isInitialized = YES;
-                isApproovEnabled = NO;
-                ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
-            }
-            return;
+        // nil config is accepted but treated as empty (bypass mode). Log a warning so callers
+        // can migrate to passing @"" explicitly. comment is passed through to the native SDK
+        // unchanged — nil and @"" are semantically distinct at the SDK level.
+        NSString *effectiveConfig = configString;
+        if (effectiveConfig == nil) {
+            ApproovLogWarning(@"%@: nil config passed to initialize; treating as empty string for bypass mode. Pass @\"\" explicitly.", TAG);
+            effectiveConfig = @"";
         }
 
-        // check if we already have a service layer initialized
-        if (isInitialized) {
-            if (isApproovEnabled && ![initialConfigString isEqualToString:normalizedConfigString]) {
+        // Reset service layer state
+        isInitialized = NO;
+        isApproovEnabled = NO;
+        initialConfigString = nil;
+        sessionTaskObserver = nil;
+        substitutionHeaders = [[NSMutableDictionary alloc] init];
+        exclusionURLRegexs = [[NSMutableSet alloc] init];
+        substitutionQueryParams = [[NSMutableSet alloc] init];
+
+        // Initialize the platform SDK if not in bypass mode (empty config).
+        // The SDK returns YES if initialization succeeded, NO if already initialized
+        // with the same config even by another service layer instance. Any other
+        // failure surfaces as localError.
+        if (effectiveConfig.length > 0) {
+            NSError *localError = nil;
+            BOOL sdkInitialized = [Approov initialize:effectiveConfig updateConfig:@"auto"
+                                              comment:comment error:&localError];
+            if (localError != nil) {
+                ApproovLogError(@"%@: Approov initialization failed: %@", TAG, localError.localizedDescription);
                 if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"general"
-                                message:@"Approov SDK already initialized with different configuration"];
+                                  message:localError.localizedDescription];
                 }
                 return;
             }
-
-            BOOL shouldCallSDK = !isApproovEnabled ||
-                ((comment != nil) && ([comment hasPrefix:@"reinit"] || [comment hasPrefix:@"options:"]));
-            if (!shouldCallSDK) {
-                return;
+            if (!sdkInitialized) {
+                ApproovLogDebug(@"%@: Approov SDK already initialized", TAG);
             }
-        }
-
-        // perform the actual SDK initialization
-        NSError *localError = nil;
-        [Approov initialize:normalizedConfigString updateConfig:@"auto" comment:comment error:&localError];
-        if (localError != nil) {
-            ApproovLogError(@"%@: Error initializing Approov SDK: %@", TAG, localError.localizedDescription);
-            if (error != nil) {
-                *error = [ApproovService createErrorWithType:@"general" message:localError.localizedDescription];
+            [Approov setUserProperty:initializerLock];
+            if (sessionTaskObserver == nil) {
+                sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
             }
-            return;
+            [ApproovService swizzleSessionTask];
+        } else {
+            ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
         }
-        // Some SDKs return NO with no error if the same configuration was already
-        // initialized elsewhere in the process. Treat that as a compatible success.
 
-        [Approov setUserProperty:initializerLock];
-
-        // create a session task observer for state transitions that can actually add the
-        // Approov protection and hook the method to allow asynchronous Approov fetching
-        if (sessionTaskObserver == nil) {
-            sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
-        }
-        [ApproovService swizzleSessionTask];
-
-        // initialization is completed
-        initialConfigString = normalizedConfigString;
+        initialConfigString = effectiveConfig;
         isInitialized = YES;
-        isApproovEnabled = YES;
+        isApproovEnabled = (effectiveConfig.length > 0);
     }
 }
 
@@ -332,20 +319,13 @@ static BOOL isSessionTaskSwizzled = NO;
 }
 
 /**
- * Sets a flag indicating if the network interceptor should proceed anyway if it is
- * not possible to obtain an Approov token due to a networking failure. If this is set
- * then your backend API can receive calls without the expected Approov token header
- * being added, or without header/query parameter substitutions being made. Note that
- * this should be used with caution because it may allow a connection to be established
- * before any dynamic pins have been received via Approov, thus potentially opening the channel to a MitM.
+ * Deprecated. Use the Swift ApproovServiceMutator API to override network failure behavior.
+ * This method is retained for source compatibility only and has no effect.
  *
- * @param proceed is true if Approov networking fails should allow continuation
+ * @param proceed unused
  */
 + (void)setProceedOnNetworkFailure:(BOOL)proceed {
-    @synchronized(initializerLock) {
-        ApproovLogDebug(@"%@: setProceedOnNetworkFailure %@", TAG, proceed ? @"YES" : @"NO");
-        proceedOnNetworkFail = proceed;
-    }
+    ApproovLogWarning(@"%@: setProceedOnNetworkFailure is deprecated and has no effect. Use ApproovServiceMutatorBridge to override network failure behavior.", TAG);
 }
 
 /**
@@ -1166,13 +1146,11 @@ static BOOL isSessionTaskSwizzled = NO;
             if ((status == ApproovTokenFetchStatusNoNetwork) ||
                 (status == ApproovTokenFetchStatusPoorNetwork) ||
                 (status == ApproovTokenFetchStatusMITMDetected)) {
-                if (!proceedOnNetworkFail) {
-                    NSString *details = [NSString stringWithFormat:@"network error: %@",
-                        [Approov stringFromApproovTokenFetchStatus:status]];
-                    if (error != nil)
-                        *error = [ApproovService createErrorWithType:@"network" message:details];
-                    return request;
-                }
+                NSString *details = [NSString stringWithFormat:@"network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
             } else if (status != ApproovTokenFetchStatusNoApproovService) {
                 // we have a more permanent error from the Approov SDK
                 NSString *details = [NSString stringWithFormat:@"error: %@",
@@ -1226,12 +1204,10 @@ static BOOL isSessionTaskSwizzled = NO;
 
     // we just return early with anything other than a success or unprotected URL - this is to ensure we don't
     // make further Approov fetches if there has been a problem and also that we don't do header or query
-    // parameter substitutions in domains not known to Approov (which therefore might not be pinned)
+    // parameter substitutions in domains not known to Approov (which therefore might not be pinned).
+    // Message signing is skipped here because it requires token artifacts (the public key for install signing
+    // or the mksid for account signing) that are only present on a successful token fetch.
     if (status != ApproovTokenFetchStatusSuccess) {
-        [ApproovService applyMessageSigningIfEnabledToRequest:updatedRequest
-                                           substitutedHeaders:@[]
-                                                  originalURL:nil
-                                     substitutedQueryParams:@[]];
         return updatedRequest;
     }
 
@@ -1276,13 +1252,11 @@ static BOOL isSessionTaskSwizzled = NO;
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
                        (status == ApproovTokenFetchStatusMITMDetected)) {
                 // we are unable to get the secure string due to network conditions so the request can
-                // be retried by the user later - unless overridden
-                if (!proceedOnNetworkFail) {
-                    NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
-                        [Approov stringFromApproovTokenFetchStatus:status]];
-                    *error = [ApproovService createErrorWithType:@"network" message:details];
-                    return request;
-                }
+                // be retried by the user later
+                NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Header substitution error: %@",
@@ -1340,13 +1314,11 @@ static BOOL isSessionTaskSwizzled = NO;
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
                        (status == ApproovTokenFetchStatusMITMDetected)) {
                 // we are unable to get the secure string due to network conditions so the request can
-                // be retried by the user later - unless overridden
-                if (!proceedOnNetworkFail) {
-                    NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
-                        [Approov stringFromApproovTokenFetchStatus:status]];
-                    *error = [ApproovService createErrorWithType:@"network" message:details];
-                    return request;
-                }
+                // be retried by the user later
+                NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution error: %@",

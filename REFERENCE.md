@@ -6,7 +6,7 @@ This document describes the public contract for the NSURLSession service layer. 
 
 ### `+initialize:error:`
 
-Initializes the service layer with a non-empty Approov configuration string and enables Approov protection when the native SDK accepts the configuration.
+Initializes the service layer using the 2-argument form. Equivalent to `+initialize:comment:error:` with a `nil` comment.
 
 ```objective-c
 NSError *error = nil;
@@ -15,16 +15,23 @@ NSError *error = nil;
 
 ### `+initialize:comment:error:`
 
-Initializes the service layer with an optional comment. The comment is forwarded to the native SDK for supported flows such as `options:...` during first initialization or `reinit...` during supported runtime reinitialization.
+Initializes the service layer and optionally the native Approov SDK. On every call the service layer resets all internal state before forwarding to the SDK — there are no service-layer same-config or reinit guards. The SDK itself determines whether a repeated initialization is compatible and returns `NO` with a `nil` error when it was already initialized with the same configuration. Any real failure (different-config conflict, malformed config, SDK error) produces a non-nil `NSError` and leaves the service layer uninitialized.
 
 ```objective-c
 NSError *error = nil;
-[ApproovService initialize:configString comment:@"reinit:policy-refresh" error:&error];
+[ApproovService initialize:configString comment:nil error:&error];
+if (error != nil) {
+    // initialization failed — service layer is uninitialized
+}
 ```
+
+**`config` parameter:** Pass a non-empty Approov configuration string for full SDK protection, or `@""` for empty-config bypass mode. Passing `nil` is accepted and treated as `@""` (bypass mode); a warning is logged and callers should migrate to passing `@""` explicitly.
+
+**`comment` parameter:** Forwarded to the native SDK as-is. `nil` and `@""` are semantically distinct at the native SDK level and must not be substituted for each other. Pass `nil` for a standard initialization. Use a `reinit...` comment for supported runtime re-initialization flows.
 
 Passing an empty config string enters empty-config bypass mode. In this mode `isInitialized` returns true, `isApproovEnabled` returns false, and the service layer behaves as a normal NSURLSession wrapper without token injection, trace headers, message signing, secure string substitution, secure string fetches, custom JWT fetches, dynamic pinning, or other native Approov SDK calls. All public methods that would otherwise call the platform SDK are guarded in this disabled mode.
 
-An empty-config bootstrap may later be upgraded by calling `initialize` again with a valid non-empty config string. If a non-empty initialization fails after empty-config bypass, the service layer remains initialized but disabled.
+An empty-config bootstrap may later be upgraded by calling `initialize` again with a valid non-empty config string. If a non-empty initialization fails after an empty-config bypass, the service layer becomes uninitialized. Callers must re-initialize before using the service layer again.
 
 ### `+isInitialized`
 
@@ -120,7 +127,7 @@ Configures automatic message signing for protected requests. Supported modes are
 - `ApproovMessageSigningModeInstall`
 - `ApproovMessageSigningModeAccount`
 
-Message signing is applied after token injection and secure string substitution. If signing fails, the request proceeds with the Approov mutation that was already applied, but without signature headers.
+Message signing is applied after token injection and secure string substitution, **only when the token fetch returns a `Success` status**. A non-success fetch (such as a network failure that the mutator allows through) does not produce signing because the required token artifacts — the public key embedded in the Approov token for install signing, or the `mksid` for account signing — are only available on a successful fetch. Without those artifacts the backend has no key material to verify any signature. If signing fails for any other reason, the request proceeds with the Approov mutation already applied but without signature headers.
 
 ### `+setMessageSigningBodyDigestEnabled:` and `+getMessageSigningBodyDigestEnabled`
 
@@ -175,7 +182,7 @@ Obsolete. The native SDK manages prefetching automatically after initialization.
 
 ### `+setProceedOnNetworkFailure:`
 
-Obsolete. Prefer the Swift `ApproovServiceMutator` decision override API for status-specific allow/block behavior. This method remains for source compatibility.
+Deprecated. This method is now a no-op and logs a deprecation warning. It has no effect on request behavior. Use the Swift `ApproovServiceMutator` decision override API for status-specific allow/block behavior. Network failures are fail-closed by default and can be overridden only through a custom mutator.
 
 ### Legacy mutator aliases
 
