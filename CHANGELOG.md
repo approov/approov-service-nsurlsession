@@ -38,3 +38,4 @@
 - Fixed Swift support packaging after removing the legacy `ApproovURLSession` folder.
 - Fixed RSA-3072 SPKI header construction: `rsa2048SPKIHeader` bytes were incorrectly used instead of `rsa3072SPKIHeader`, producing corrupt SPKI data for any RSA-3072 certificate and causing silent pinning failures for that key type.
 - Fixed substitution header loop reading `prefix` from the original unlocked `substitutionHeaders` dictionary instead of from the already-captured thread-safe copy `subsHeaders`, eliminating a potential data race during concurrent `addSubstitutionHeader:` calls.
+- Fixed `ApproovSessionTaskObserver`: replaced five `NSLog` calls with the appropriate `ApproovLog*` macros (`ApproovLogError`, `ApproovLogWarning`, `ApproovLogDebug`) so session task lifecycle events respect the configured service-layer log level rather than always emitting to the system log.
