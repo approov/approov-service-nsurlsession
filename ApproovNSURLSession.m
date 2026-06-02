@@ -233,7 +233,7 @@ completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *erro
  */
 - (NSURLSessionStreamTask *)streamTaskWithHostName:(NSString *)hostname port:(NSInteger)port {
     // Approov protection is not provided for this
-    return [self streamTaskWithHostName:hostname port:port];
+    return [self.pinnedURLSession streamTaskWithHostName:hostname port:port];
 }
 
 /**

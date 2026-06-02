@@ -19,6 +19,12 @@
 #import "ApproovService.h"
 #import "ApproovSessionTaskObserver.h"
 #import "RSSwizzle.h"
+#if __has_include(<approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>)
+#import <approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>
+#else
+#import "approov_service_nsurlsession-Swift.h"
+#endif
+#import <stdarg.h>
 
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @implementation ApproovService
@@ -26,11 +32,22 @@
 // tag for logging
 static const NSString *TAG = @"ApproovService";
 
+// service layer logging level, defaulting to informational output for backward compatibility
+static ApproovLogLevel loggingLevel = ApproovLogLevelInfo;
+
+#define ApproovLogError(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelError format:(fmt), ##__VA_ARGS__]
+#define ApproovLogWarning(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelWarning format:(fmt), ##__VA_ARGS__]
+#define ApproovLogInfo(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelInfo format:(fmt), ##__VA_ARGS__]
+#define ApproovLogDebug(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelDebug format:(fmt), ##__VA_ARGS__]
+
 // header on which the Approov token is added
 static NSString *approovTokenHeader = @"Approov-Token";
 
 // Approov token custom prefix: any prefix to be added such as "Bearer "
 static NSString *approovTokenPrefix = @"";
+
+// optional Approov trace ID debug header
+static NSString *approovTraceIDHeader = @"Approov-TraceID";
 
 // bind header string
 static NSString *bindingHeader = @"";
@@ -45,11 +62,25 @@ static NSString *initializerLock = @"approov-service-nsurlsession";
 // has the ApproovService been initialized already
 static BOOL isInitialized = NO;
 
+// is the Approov SDK active for request protection
+static BOOL isApproovEnabled = NO;
+
 // original config string used during initialization
 static NSString *initialConfigString = nil;
 
-// should we proceed with network request in case of network failure
-static BOOL proceedOnNetworkFail = NO;
+// proceedOnNetworkFail has been removed; network failures are always fail-closed via the mutator
+
+// if enabled and no Approov token is available, send the token fetch status in the token header
+static BOOL useApproovStatusIfNoToken = NO;
+
+// message signing is opt-in to preserve existing service layer behavior
+static ApproovMessageSigningMode messageSigningMode = ApproovMessageSigningModeDisabled;
+
+// when enabled, signed requests with replayable bodies include a Content-Digest header
+static BOOL messageSigningBodyDigestEnabled = YES;
+
+// when enabled, signed requests must include a Content-Digest header
+static BOOL messageSigningBodyDigestRequired = NO;
 
 // Set of URL regexs that should be excluded from any Approov protection, mapped to the compiled Pattern
 static NSMutableSet<NSString *> *exclusionURLRegexs = nil;
@@ -59,6 +90,9 @@ static NSMutableSet<NSString *> *substitutionQueryParams = nil;
 
 // session task observer for initating Approov protection when the task is initially resumed
 static ApproovSessionTaskObserver *sessionTaskObserver;
+
+// has NSURLSessionTask resume already been swizzled
+static BOOL isSessionTaskSwizzled = NO;
 
 /**
  * Create an error resullting from using the Approov SDK.
@@ -98,6 +132,89 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     return [[NSError alloc] initWithDomain:@"approov" code:499 userInfo:userInfo];
 }
 
++ (NSString *)valueForHTTPHeaderField:(NSString *)header
+                             inHeaders:(NSDictionary *)headers {
+    if ((header == nil) || (headers == nil)) {
+        return nil;
+    }
+
+    id directValue = [headers objectForKey:header];
+    if (directValue != nil) {
+        return [directValue description];
+    }
+
+    for (id key in headers) {
+        if ([key isKindOfClass:[NSString class]] &&
+            [(NSString *)key caseInsensitiveCompare:header] == NSOrderedSame) {
+            id value = [headers objectForKey:key];
+            return [value description];
+        }
+    }
+    return nil;
+}
+
++ (NSString *)valueForHTTPHeaderField:(NSString *)header
+                            inRequest:(NSURLRequest *)request
+                         sessionConfig:(NSURLSessionConfiguration *)sessionConfig {
+    if (header == nil) {
+        return nil;
+    }
+
+    NSString *requestValue = [request valueForHTTPHeaderField:header];
+    if (requestValue != nil) {
+        return requestValue;
+    }
+
+    requestValue = [ApproovService valueForHTTPHeaderField:header
+                                                 inHeaders:request.allHTTPHeaderFields];
+    if (requestValue != nil) {
+        return requestValue;
+    }
+
+    return [ApproovService valueForHTTPHeaderField:header
+                                         inHeaders:sessionConfig.HTTPAdditionalHeaders];
+}
+
++ (NSString *)headerValueForTokenFetchStatus:(ApproovTokenFetchStatus)status {
+    NSString *statusString = [Approov stringFromApproovTokenFetchStatus:status];
+    statusString = [statusString stringByReplacingOccurrencesOfString:@" " withString:@"_"];
+    return statusString.uppercaseString;
+}
+
++ (void)setLoggingLevel:(ApproovLogLevel)level {
+    @synchronized(initializerLock) {
+        loggingLevel = level;
+    }
+    ApproovLogInfo(@"%@: setLoggingLevel %ld", TAG, (long)level);
+}
+
++ (ApproovLogLevel)getLoggingLevel {
+    @synchronized(initializerLock) {
+        return loggingLevel;
+    }
+}
+
++ (BOOL)shouldLogAtLevel:(ApproovLogLevel)level {
+    if ((level == ApproovLogLevelOff) || (level < ApproovLogLevelOff) || (level > ApproovLogLevelDebug)) {
+        return NO;
+    }
+    @synchronized(initializerLock) {
+        return loggingLevel >= level;
+    }
+}
+
++ (void)logWithLevel:(ApproovLogLevel)level format:(NSString *)format, ... {
+    if (![ApproovService shouldLogAtLevel:level]) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    NSLog(@"%@", message);
+}
+
 /**
  * Swizzles the NSURLSessionTask resume method that is called when a task is to be transitioned
  * from its initial suspended state into the running state. This provides an opportunity to intercept (and
@@ -105,6 +222,9 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * calling thread is not blocked.
  */
 + (void)swizzleSessionTask {
+    if (isSessionTaskSwizzled) {
+        return;
+    }
     RSSwizzleInstanceMethod(NSClassFromString(@"NSURLSessionTask"),
         @selector(resume),
         RSSWReturnType(void),
@@ -114,6 +234,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
                 RSSWCallOriginal();
         }),
     0, NULL);
+    isSessionTaskSwizzled = YES;
 }
 
 /**
@@ -123,60 +244,79 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @param configString is the string to be used for initialization
  * @param error is populated with an error if there was a problem during initialization, or nil if not required
  */
-+ (void)initialize:(NSString *)configString error:(NSError **)error {
++ (void)initialize:(NSString * _Nonnull)configString error:(NSError **)error {
+    [ApproovService initialize:configString comment:nil error:error];
+}
+
++ (void)initialize:(NSString * _Nonnull)configString comment:(NSString *)comment error:(NSError **)error {
     @synchronized(initializerLock) {
-        // initialize headers map, exclusion dictionary and query parameters set
-        if (substitutionHeaders == nil) substitutionHeaders = [[NSMutableDictionary alloc] init];
-        if (exclusionURLRegexs == nil) exclusionURLRegexs = [[NSMutableSet alloc] init];
-        if (substitutionQueryParams == nil) substitutionQueryParams = [[NSMutableSet alloc] init];
-        
-        // check if we already have single instance initialized and we attempt to use a different config string
-        if (isInitialized) {
-            if (![initialConfigString isEqualToString:configString] && (error != nil)) {
-                *error = [ApproovService createErrorWithType:@"general"
-                            message:@"Approov SDK already initialized with different configuration"];
-            }
-        } else {
-            // perform the actual SDK initialization (unless we have an empty config string)
-            if (configString.length > 0) {
-                NSError *localError = nil;
-                [Approov initialize:configString updateConfig:@"auto" comment:nil error:&localError];
-                if (localError != nil) {
-                    NSLog(@"%@: Error initializing Approov SDK: %@", TAG, localError.localizedDescription);
-                    if (error != nil)
-                        *error = [ApproovService createErrorWithType:@"general" message:localError.localizedDescription];
-                    return;
+        if (error != nil) {
+            *error = nil;
+        }
+
+        // Reset service layer state
+        isInitialized = NO;
+        isApproovEnabled = NO;
+        initialConfigString = nil;
+        sessionTaskObserver = nil;
+        substitutionHeaders = [[NSMutableDictionary alloc] init];
+        exclusionURLRegexs = [[NSMutableSet alloc] init];
+        substitutionQueryParams = [[NSMutableSet alloc] init];
+
+        // Initialize the platform SDK if not in bypass mode (empty config).
+        // The SDK returns YES if initialization succeeded, NO if already initialized
+        // with the same config even by another service layer instance. Any other
+        // failure surfaces as localError.
+        if (configString.length > 0) {
+            NSError *localError = nil;
+            BOOL sdkInitialized = [Approov initialize:configString updateConfig:@"auto"
+                                              comment:comment error:&localError];
+            if (localError != nil) {
+                ApproovLogError(@"%@: Approov initialization failed: %@", TAG, localError.localizedDescription);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"general"
+                                  message:localError.localizedDescription];
                 }
+                return;
+            }
+            if (!sdkInitialized) {
+                ApproovLogDebug(@"%@: Approov SDK already initialized", TAG);
             }
             [Approov setUserProperty:initializerLock];
-            
-            // create a session task observer for state transitions that can actually add the
-            // Approov protection and hook the method to allow asynchronous Approov fetching
-            sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
+            if (sessionTaskObserver == nil) {
+                sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
+            }
             [ApproovService swizzleSessionTask];
-            
-            // initialization is completed
-            initialConfigString = configString;
-            isInitialized = YES;
+        } else {
+            ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
         }
+
+        initialConfigString = configString;
+        isInitialized = YES;
+        isApproovEnabled = (configString.length > 0);
+    }
+}
+
++ (BOOL)isInitialized {
+    @synchronized(initializerLock) {
+        return isInitialized;
+    }
+}
+
++ (BOOL)isApproovEnabled {
+    @synchronized(initializerLock) {
+        return isInitialized && isApproovEnabled;
     }
 }
 
 /**
- * Sets a flag indicating if the network interceptor should proceed anyway if it is
- * not possible to obtain an Approov token due to a networking failure. If this is set
- * then your backend API can receive calls without the expected Approov token header
- * being added, or without header/query parameter substitutions being made. Note that
- * this should be used with caution because it may allow a connection to be established
- * before any dynamic pins have been received via Approov, thus potentially opening the channel to a MitM.
+ * Deprecated. Use the Swift ApproovServiceMutator API to override network failure behavior.
+ * This method is retained for source compatibility only and has no effect.
  *
- * @param proceed is true if Approov networking fails should allow continuation
+ * @param proceed unused
  */
 + (void)setProceedOnNetworkFailure:(BOOL)proceed {
-    @synchronized(initializerLock) {
-        NSLog(@"%@: setProceedOnNetworkFailure %@", TAG, proceed ? @"YES" : @"NO");
-        proceedOnNetworkFail = proceed;
-    }
+    ApproovLogWarning(@"%@: setProceedOnNetworkFailure is deprecated and has no effect. Use ApproovServiceMutatorBridge to override network failure behavior.", TAG);
 }
 
 /**
@@ -190,7 +330,10 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @param devKey is the development key to be used
  */
 + (void)setDevKey:(NSString *)devKey {
-    NSLog(@"%@: setDevKey", TAG);
+    if (!isApproovEnabled) {
+        return;
+    }
+    ApproovLogDebug(@"%@: setDevKey", TAG);
     [Approov setDevKey:devKey];
 }
 
@@ -212,7 +355,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  */
 + (void)setBindingHeader:(NSString *)header {
     @synchronized(bindingHeader) {
-        NSLog(@"%@: setBindingHeader %@", TAG, header);
+        ApproovLogDebug(@"%@: setBindingHeader %@", TAG, header);
         bindingHeader = header;
     }
 }
@@ -235,7 +378,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  */
 + (void)setApproovTokenHeader:(NSString *)header {
     @synchronized(approovTokenHeader) {
-        NSLog(@"%@: setApproovTokenHeader %@", TAG, header);
+        ApproovLogDebug(@"%@: setApproovTokenHeader %@", TAG, header);
         approovTokenHeader = header;
     }
 }
@@ -258,8 +401,31 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  */
 + (void)setApproovTokenPrefix:(NSString *)prefix {
     @synchronized(approovTokenPrefix) {
-        NSLog(@"%@: setApproovTokenPrefix %@", TAG, prefix);
+        ApproovLogDebug(@"%@: setApproovTokenPrefix %@", TAG, prefix);
         approovTokenPrefix = prefix;
+    }
+}
+
+/**
+ * Gets the header used for the Approov trace ID.
+ *
+ * @return Header name
+ */
++ (NSString *)getApproovTraceIDHeader {
+    @synchronized(approovTraceIDHeader) {
+        return approovTraceIDHeader;
+    }
+}
+
+/**
+ * Sets the header used for the Approov trace ID. Pass nil or an empty string to disable.
+ *
+ * @param header is the header to use
+ */
++ (void)setApproovTraceIDHeader:(NSString *)header {
+    @synchronized(approovTraceIDHeader) {
+        ApproovLogDebug(@"%@: setApproovTraceIDHeader %@", TAG, header);
+        approovTraceIDHeader = header ?: @"";
     }
 }
 
@@ -276,7 +442,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 + (void)addSubstitutionHeader:(NSString *)header requiredPrefix:(NSString *)requiredPrefix {
     if (isInitialized){
         @synchronized(substitutionHeaders){
-            NSLog(@"%@: addSubstitutionHeader %@, prefix: %@", TAG, header, requiredPrefix);
+            ApproovLogDebug(@"%@: addSubstitutionHeader %@, prefix: %@", TAG, header, requiredPrefix);
             if (requiredPrefix == nil) {
                     [substitutionHeaders setValue:@"" forKey:header];
             } else {
@@ -294,7 +460,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 + (void)removeSubstitutionHeader:(NSString *)header {
     if (isInitialized){
         @synchronized(substitutionHeaders){
-            NSLog(@"%@: removeSubstitutionHeader %@", TAG, header);
+            ApproovLogDebug(@"%@: removeSubstitutionHeader %@", TAG, header);
             [substitutionHeaders removeObjectForKey:header];
         }
     }
@@ -312,7 +478,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     @synchronized (substitutionQueryParams) {
         if (isInitialized) {
             [substitutionQueryParams addObject:key];
-            NSLog(@"%@: addSubstitutionQueryParam: %@", TAG, key);
+            ApproovLogDebug(@"%@: addSubstitutionQueryParam: %@", TAG, key);
         }
     }
 }
@@ -326,7 +492,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     @synchronized (substitutionQueryParams) {
         if (isInitialized) {
             [substitutionQueryParams removeObject:key];
-            NSLog(@"%@: removeSubstitutionQueryParam: %@", TAG, key);
+            ApproovLogDebug(@"%@: removeSubstitutionQueryParam: %@", TAG, key);
         }
     }
 }
@@ -350,7 +516,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     @synchronized (exclusionURLRegexs) {
         if (isInitialized){
             [exclusionURLRegexs addObject:urlRegex];
-            NSLog(@"%@: addExclusionURLRegex: %@", TAG, urlRegex);
+            ApproovLogDebug(@"%@: addExclusionURLRegex: %@", TAG, urlRegex);
         }
     }
     
@@ -365,7 +531,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     @synchronized (exclusionURLRegexs) {
         if (isInitialized) {
             [exclusionURLRegexs removeObject:urlRegex];
-            NSLog(@"%@: removeExclusionURLRegex: %@", TAG, urlRegex);
+            ApproovLogDebug(@"%@: removeExclusionURLRegex: %@", TAG, urlRegex);
         }
     }
 }
@@ -377,13 +543,13 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  *  expensive the prefetch seems reasonable.
  */
 + (void)prefetch {
-    if (isInitialized) {
-        NSLog(@"%@: prefetch", TAG);
+    if (isApproovEnabled) {
+        ApproovLogDebug(@"%@: prefetch", TAG);
         [Approov fetchApproovToken:^(ApproovTokenFetchResult *result) {
             if (result.status == ApproovTokenFetchStatusUnknownURL)
-                NSLog(@"%@: prefetch: success", TAG);
+                ApproovLogInfo(@"%@: prefetch: success", TAG);
             else
-                NSLog(@"%@: prefetch: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+                ApproovLogInfo(@"%@: prefetch: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
         }:@"approov.io"];
     }
 }
@@ -397,11 +563,14 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @param error is a pointer to a return NSError which might indicate an error during the precheck
  */
 + (void)precheck:(NSError **)error {
+    if (!isApproovEnabled) {
+        return;
+    }
     ApproovTokenFetchResult *result = [Approov fetchSecureStringAndWait:@"precheck-dummy-key" :nil];
     if (result.status == ApproovTokenFetchStatusUnknownKey)
-        NSLog(@"%@: precheck: success", TAG);
+        ApproovLogInfo(@"%@: precheck: success", TAG);
     else
-        NSLog(@"%@: precheck: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+        ApproovLogInfo(@"%@: precheck: %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected){
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"precheck rejection: %@ %@",
@@ -435,11 +604,14 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return String of the device ID or nil in case of an error
  */
 + (NSString *)getDeviceID {
+    if (!isApproovEnabled) {
+        return nil;
+    }
     NSString* deviceID = [Approov getDeviceID];
     if (deviceID != nil)
-        NSLog(@"%@: getDeviceID %@", TAG, deviceID);
+        ApproovLogDebug(@"%@: getDeviceID %@", TAG, deviceID);
     else
-        NSLog(@"%@: getDeviceID error", TAG);
+        ApproovLogError(@"%@: getDeviceID error", TAG);
     return deviceID;
 }
 
@@ -453,7 +625,10 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @param data is the data to be hashed and set in the token
  */
 + (void)setDataHashInToken:(NSString *)data {
-    NSLog(@"%@: setDataHashInToken", TAG);
+    if (!isApproovEnabled) {
+        return;
+    }
+    ApproovLogDebug(@"%@: setDataHashInToken", TAG);
     [Approov setDataHashInToken:data];
 }
 
@@ -471,8 +646,11 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return String of the fetched token or nil if there was an error
  */
 + (NSString *)fetchToken:(NSString *)url error:(NSError **)error {
+    if (!isApproovEnabled) {
+        return nil;
+    }
     ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:url];
-    NSLog(@"%@: fetchToken for %@: %@", TAG, url, result.loggableToken);
+    ApproovLogInfo(@"%@: fetchToken for %@: %@", TAG, url, result.loggableToken);
     if ((result.status == ApproovTokenFetchStatusNoNetwork) ||
         (result.status == ApproovTokenFetchStatusPoorNetwork) ||
         (result.status == ApproovTokenFetchStatusMITMDetected)) {
@@ -494,19 +672,143 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
         return result.token;
 }
 
++ (NSString *)getMessageSignature:(NSString *)message {
+    return [self getAccountMessageSignature:message];
+}
+
 /**
- * Gets the signature for the given message. This uses an account specific message signing key that is
- * transmitted to the SDK after a successful fetch if the facility is enabled for the account. Note
- * that if the attestation failed then the signing key provided is actually random so that the
- * signature will be incorrect. An Approov token should always be included in the message
- * being signed and sent alongside this signature to prevent replay attacks.
+ * Gets the signature for the given message using the account-specific message signing key.
  *
  * @param message is the message whose content is to be signed
  * @return String of the base64 encoded message signature
  */
-+ (NSString *)getMessageSignature:(NSString *)message {
-    NSLog(@"%@: getMessageSignature", TAG);
++ (NSString *)getAccountMessageSignature:(NSString *)message {
+    if (!isApproovEnabled) {
+        return nil;
+    }
+    ApproovLogDebug(@"%@: getAccountMessageSignature", TAG);
     return [Approov getMessageSignature:message];
+}
+
+/**
+ * Gets the signature for the given message using the install-specific private key.
+ *
+ * @param message is the message whose content is to be signed
+ * @return String of the base64 encoded message signature
+ */
++ (NSString *)getInstallMessageSignature:(NSString *)message {
+    if (!isApproovEnabled) {
+        return nil;
+    }
+    ApproovLogDebug(@"%@: getInstallMessageSignature", TAG);
+    return [Approov getInstallMessageSignature:message];
+}
+
+/**
+ * Sets the message signing mode to be applied to protected requests.
+ *
+ * @param mode is the message signing mode to use
+ */
++ (void)setMessageSigningMode:(ApproovMessageSigningMode)mode {
+    @synchronized(initializerLock) {
+        ApproovLogDebug(@"%@: setMessageSigningMode %ld", TAG, (long)mode);
+        messageSigningMode = mode;
+    }
+}
+
+/**
+ * Gets the current message signing mode.
+ *
+ * @return the message signing mode
+ */
++ (ApproovMessageSigningMode)getMessageSigningMode {
+    @synchronized(initializerLock) {
+        return messageSigningMode;
+    }
+}
+
+/**
+ * Sets whether signed requests with replayable bodies should include a Content-Digest header.
+ *
+ * @param enabled is YES if body digest generation should be attempted
+ */
++ (void)setMessageSigningBodyDigestEnabled:(BOOL)enabled {
+    @synchronized(initializerLock) {
+        ApproovLogDebug(@"%@: setMessageSigningBodyDigestEnabled %@", TAG, enabled ? @"YES" : @"NO");
+        messageSigningBodyDigestEnabled = enabled;
+    }
+}
+
+/**
+ * Gets whether signed requests with replayable bodies include a Content-Digest header.
+ *
+ * @return YES if body digest generation is enabled
+ */
++ (BOOL)getMessageSigningBodyDigestEnabled {
+    @synchronized(initializerLock) {
+        return messageSigningBodyDigestEnabled;
+    }
+}
+
+/**
+ * Sets whether signed requests with bodies should include a Content-Digest header.
+ *
+ * @param required is YES if body digest generation should be required
+ */
++ (void)setMessageSigningBodyDigestRequired:(BOOL)required {
+    @synchronized(initializerLock) {
+        ApproovLogDebug(@"%@: setMessageSigningBodyDigestRequired %@", TAG, required ? @"YES" : @"NO");
+        messageSigningBodyDigestRequired = required;
+    }
+}
+
+/**
+ * Gets whether signed requests with bodies include a Content-Digest header.
+ *
+ * @return YES if body digest generation is required
+ */
++ (BOOL)getMessageSigningBodyDigestRequired {
+    @synchronized(initializerLock) {
+        return messageSigningBodyDigestRequired;
+    }
+}
+
+/**
+ * Sets whether the Approov token header should be populated with the token fetch status
+ * when no token is available and the request is allowed to proceed.
+ *
+ * @param shouldUse is YES if token fetch statuses should be sent in the token header
+ */
++ (void)setUseApproovStatusIfNoToken:(BOOL)shouldUse {
+    @synchronized(initializerLock) {
+        ApproovLogDebug(@"%@: setUseApproovStatusIfNoToken %@", TAG, shouldUse ? @"YES" : @"NO");
+        useApproovStatusIfNoToken = shouldUse;
+    }
+}
+
+/**
+ * Returns the current state of use Approov status if no token.
+ *
+ * @return YES if token fetch statuses should be sent in the token header
+ */
++ (BOOL)sharedUseApproovStatusIfNoToken {
+    @synchronized(initializerLock) {
+        return useApproovStatusIfNoToken;
+    }
+}
+
+/**
+ * Returns a copy of the current exclusion URL regexs for Swift mutator support.
+ *
+ * @return a mutable set containing the exclusion URL regexs
+ */
++ (NSMutableSet<NSString *> *)sharedExclusionURLRegexs {
+    @synchronized(exclusionURLRegexs) {
+        if (exclusionURLRegexs == nil) {
+            return [[NSMutableSet alloc] init];
+        }
+        return [[NSMutableSet alloc] initWithSet:exclusionURLRegexs copyItems:NO];
+    }
 }
 
 /**
@@ -524,6 +826,9 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return secure string (should not be cached by your app) or nil if it was not defined or an error ocurred
  */
 + (NSString *)fetchSecureString:(NSString *)key newDef:(NSString *)newDef error:(NSError **)error  {
+    if (!isApproovEnabled) {
+        return nil;
+    }
     // determine the type of operation as the values themselves cannot be logged
     NSString* type = @"lookup";
     if (newDef != nil)
@@ -531,7 +836,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     
     // fetch any secure string keyed by the value, catching any exceptions the SDK might throw
     ApproovTokenFetchResult *result = [Approov fetchSecureStringAndWait:key :newDef];
-    NSLog(@"%@: fetchSecureString %@: %@", TAG, type, [Approov stringFromApproovTokenFetchStatus:result.status]);
+    ApproovLogInfo(@"%@: fetchSecureString %@: %@", TAG, type, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"fetchSecureString rejection: %@ %@",
@@ -571,8 +876,11 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return custom JWT string or nil if an error occurred
  */
 + (NSString *)fetchCustomJWT:(NSString *)payload error:(NSError **)error {
+    if (!isApproovEnabled) {
+        return nil;
+    }
     ApproovTokenFetchResult* result = [Approov fetchCustomJWTAndWait:payload];
-    NSLog(@"%@: fetchCustomJWT %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
+    ApproovLogInfo(@"%@: fetchCustomJWT %@", TAG, [Approov stringFromApproovTokenFetchStatus:result.status]);
     if (result.status == ApproovTokenFetchStatusRejected) {
         // if the request is rejected then we provide a special exception with additional information
         NSString *details = [NSString stringWithFormat:@"fetchCustomJWT rejection: %@ %@",
@@ -611,6 +919,9 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return dictionary of the pins for different host domains
  */
 + (NSDictionary *)getPins:(NSString*)pinType {
+    if (!isApproovEnabled) {
+        return @{};
+    }
     NSDictionary* returnDictionary = [Approov getPins:pinType];
     return returnDictionary;
 }
@@ -623,10 +934,13 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @return String ARC from last attestation request or empty string if network unavailable (not used here)
  */
 + (NSString *)getLastARC {
+    if (!isApproovEnabled) {
+        return @"";
+    }
     // Get the dynamic pins from Approov
     NSDictionary<NSString *, NSArray<NSString *> *> *approovPins = [Approov getPins:@"public-key-sha256"];
     if (approovPins == nil || approovPins.count == 0) {
-        NSLog(@"%@: no host pinning information available", TAG);
+        ApproovLogInfo(@"%@: no host pinning information available", TAG);
         return @"";
     }
     // The approovPins contains a map of hostnames to pin strings. Skip '*' and use another hostname if available.
@@ -646,7 +960,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
             }
         }
     }
-    NSLog(@"%@: no ARC available", TAG);
+    ApproovLogInfo(@"%@: no ARC available", TAG);
     return @"";
 }
 
@@ -660,7 +974,10 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
  * @param attrs is the signed JWT holding the new install attributes
  */
 + (void)setInstallAttrsInToken:(NSString *)attrs {
-    NSLog(@"%@: setInstallAttrsInToken", TAG);
+    if (!isApproovEnabled) {
+        return;
+    }
+    ApproovLogDebug(@"%@: setInstallAttrsInToken", TAG);
     [Approov setInstallAttrsInToken:attrs];
 }
 
@@ -679,6 +996,38 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
         [sessionTaskObserver addWithTask:task sessionConfig:sessionConfig completionHandler:completionHandler];
 }
 
++ (void)addTraceIDFromResult:(ApproovTokenFetchResult *)result
+                   toRequest:(NSMutableURLRequest *)request {
+    NSString *traceIDHeader;
+    @synchronized(approovTraceIDHeader) {
+        traceIDHeader = approovTraceIDHeader;
+    }
+    if ((traceIDHeader.length > 0) && (result.traceID != nil)) {
+        [request setValue:result.traceID forHTTPHeaderField:traceIDHeader];
+    }
+}
+
++ (void)applyMessageSigningIfEnabledToRequest:(NSMutableURLRequest *)request
+                           substitutedHeaders:(NSArray<NSString *> *)substitutedHeaders
+                                  originalURL:(NSString *)originalURL
+                     substitutedQueryParams:(NSArray<NSString *> *)substitutedQueryParams {
+    ApproovMessageSigningMode mode = [ApproovService getMessageSigningMode];
+    if (mode == ApproovMessageSigningModeDisabled) {
+        return;
+    }
+
+    BOOL useAccountSigning = (mode == ApproovMessageSigningModeAccount);
+    [[ApproovServiceMutatorBridge shared] setUseAccountSigning:useAccountSigning];
+    [[ApproovServiceMutatorBridge shared] setBodyDigestEnabled:[ApproovService getMessageSigningBodyDigestEnabled]];
+    [[ApproovServiceMutatorBridge shared] setBodyDigestRequired:[ApproovService getMessageSigningBodyDigestRequired]];
+    [[ApproovServiceMutatorBridge shared] processRequest:request
+                                             tokenHeader:[ApproovService getApproovTokenHeader]
+                                          traceIDHeader:[ApproovService getApproovTraceIDHeader]
+                                   substitutionHeaders:substitutedHeaders
+                                           originalURL:originalURL
+                              substitutionQueryParams:substitutedQueryParams];
+}
+
 /**
  * Adds Approov to the given request. This involves fetching an Approov token for the domain being accessed and
  * adding an Approov token to the outgoing header. This may also update the token if token binding is being used.
@@ -695,7 +1044,7 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     // get the URL host domain
     NSString *host = request.URL.host;
     if (host == nil) {
-        NSLog(@"%@: request domain was missing or invalid", TAG);
+        ApproovLogInfo(@"%@: request domain was missing or invalid", TAG);
         return request;
     }
 
@@ -703,13 +1052,13 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     // during development
     NSString *url = request.URL.absoluteString;
     if ([host isEqualToString:@"localhost"]) {
-        NSLog(@"%@: localhost forwarded: %@", TAG, url);
+        ApproovLogInfo(@"%@: localhost forwarded: %@", TAG, url);
         return request;
     }
 
-    // if the Approov SDK is not initialized then we just return immediately without making any changes
-    if (!isInitialized) {
-        NSLog(@"%@: uninitialized forwarded: %@", TAG, url);
+    // if the Approov SDK is not active then we just return immediately without making any changes
+    if (!isApproovEnabled) {
+        ApproovLogInfo(@"%@: unprotected service forwarded: %@", TAG, url);
         return request;
     }
 
@@ -726,36 +1075,33 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
         if (!error) {
             NSTextCheckingResult *match = [regex firstMatchInString:url options:0 range:NSMakeRange(0, [url length])];
             if (match) {
-                NSLog(@"%@: excluded url: %@", TAG, url);
+                ApproovLogInfo(@"%@: excluded url: %@", TAG, url);
                 return request;
             }
         }
     }
 
-    // get the full set of headers including those defined on the session
-    NSMutableDictionary<NSString *,NSString *> *allHeaders = [[NSMutableDictionary alloc]init];
-    [allHeaders addEntriesFromDictionary:sessionConfig.HTTPAdditionalHeaders];
-    [allHeaders addEntriesFromDictionary:request.allHTTPHeaderFields];
-    
     // update the data hash based on any token binding header
     @synchronized(bindingHeader) {
         if (![bindingHeader isEqualToString:@""]) {
-            NSString *headerValue = allHeaders[bindingHeader];
+            NSString *headerValue = [ApproovService valueForHTTPHeaderField:bindingHeader
+                                                                  inRequest:request
+                                                               sessionConfig:sessionConfig];
             if (headerValue != nil) {
                 [Approov setDataHashInToken:headerValue];
-                NSLog(@"%@: setting data hash for binding header %@", TAG, bindingHeader);
+                ApproovLogDebug(@"%@: setting data hash for binding header %@", TAG, bindingHeader);
             }
         }
     }
 
     // fetch the Approov token and log the result
     ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:url];
-    NSLog(@"%@: token for %@: %@", TAG, host, [result loggableToken]);
+    ApproovLogInfo(@"%@: token for %@: %@", TAG, host, [result loggableToken]);
 
     // log if a configuration update is received and call fetchConfig to clear the update state
     if (result.isConfigChanged) {
         [Approov fetchConfig];
-        NSLog(@"%@: dynamic configuration update received", TAG);
+        ApproovLogInfo(@"%@: dynamic configuration update received", TAG);
     }
 
     // copy request into a form were it can be updated
@@ -763,54 +1109,102 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 
     // process the token fetch result
     ApproovTokenFetchStatus status = [result status];
-    switch (status) {
-        case ApproovTokenFetchStatusSuccess:
-        {
-            // add the Approov token to the required header
-            NSString *tokenHeader;
-            @synchronized(approovTokenHeader) {
-                tokenHeader = approovTokenHeader;
-            }
-            NSString *tokenPrefix;
-            @synchronized(approovTokenPrefix) {
-                tokenPrefix = approovTokenPrefix;
-            }
-            NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, [result token]];
-            [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
-            break;
+
+    // Let the service mutator decide whether non-standard token fetch statuses should proceed.
+    if ((status != ApproovTokenFetchStatusSuccess) &&
+        (status != ApproovTokenFetchStatusUnknownURL) &&
+        (status != ApproovTokenFetchStatusUnprotectedURL)) {
+        NSError *mutatorError = nil;
+        BOOL shouldProceed = NO;
+        @try {
+            shouldProceed = [[ApproovServiceMutatorBridge shared]
+                handleInterceptorFetchTokenResult:result
+                                              url:url
+                                     errorPointer:&mutatorError];
+        } @catch (NSException *exception) {
+            if (error != nil)
+                *error = [ApproovService createErrorWithType:@"general" message:exception.reason];
+            return request;
         }
-        case ApproovTokenFetchStatusUnknownURL:
-        case ApproovTokenFetchStatusUnprotectedURL:
-        case ApproovTokenFetchStatusNoApproovService:
-            // in these cases we continue without adding an Approov token
-            break;
-        case ApproovTokenFetchStatusNoNetwork:
-        case ApproovTokenFetchStatusPoorNetwork:
-        case ApproovTokenFetchStatusMITMDetected:
-            // unless we are proceeding on network fail, we throw an exception if we are unable to get
-            // an Approov token due to network conditions
-            if (!proceedOnNetworkFail) {
-                NSString *details = [NSString stringWithFormat:@"network error: %@",
-                    [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"network" message:details];
+
+        if (!shouldProceed) {
+            if (mutatorError != nil) {
+                if (error != nil)
+                    *error = mutatorError;
                 return request;
             }
-        default:
-        {
-            // we have a more permanent error from the Approov SDK
-            NSString *details = [NSString stringWithFormat:@"error: %@",
-                [Approov stringFromApproovTokenFetchStatus:status]];
-            *error = [ApproovService createErrorWithType:@"general" message:details];
-            return request;
+
+            if ((status == ApproovTokenFetchStatusNoNetwork) ||
+                (status == ApproovTokenFetchStatusPoorNetwork) ||
+                (status == ApproovTokenFetchStatusMITMDetected)) {
+                NSString *details = [NSString stringWithFormat:@"network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
+            } else if (status != ApproovTokenFetchStatusNoApproovService) {
+                // we have a more permanent error from the Approov SDK
+                NSString *details = [NSString stringWithFormat:@"error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"general" message:details];
+                return request;
+            }
         }
     }
 
+    if (status == ApproovTokenFetchStatusSuccess) {
+        // add the Approov token to the required header
+        NSString *tokenHeader;
+        @synchronized(approovTokenHeader) {
+            tokenHeader = approovTokenHeader;
+        }
+        NSString *tokenPrefix;
+        @synchronized(approovTokenPrefix) {
+            tokenPrefix = approovTokenPrefix;
+        }
+        NSString *tokenValue = result.token ?: @"";
+        if (tokenValue.length == 0 && useApproovStatusIfNoToken) {
+            tokenValue = [ApproovService headerValueForTokenFetchStatus:status];
+        }
+        NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, tokenValue];
+        [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+    } else if ((status != ApproovTokenFetchStatusUnknownURL) &&
+               (status != ApproovTokenFetchStatusUnprotectedURL) &&
+               useApproovStatusIfNoToken) {
+        NSString *tokenHeader;
+        @synchronized(approovTokenHeader) {
+            tokenHeader = approovTokenHeader;
+        }
+        NSString *tokenPrefix;
+        @synchronized(approovTokenPrefix) {
+            tokenPrefix = approovTokenPrefix;
+        }
+        NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix,
+            [ApproovService headerValueForTokenFetchStatus:status]];
+        [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+    }
+
+    // unprotected or unknown URLs are not subject to request mutation
+    if ((status == ApproovTokenFetchStatusUnknownURL) ||
+        (status == ApproovTokenFetchStatusUnprotectedURL)) {
+        return updatedRequest;
+    }
+
+    [ApproovService addTraceIDFromResult:result toRequest:updatedRequest];
+
     // we just return early with anything other than a success or unprotected URL - this is to ensure we don't
     // make further Approov fetches if there has been a problem and also that we don't do header or query
-    // parameter substitutions in domains not known to Approov (which therefore might not be pinned)
-    if ((status != ApproovTokenFetchStatusSuccess) &&
-        (status != ApproovTokenFetchStatusUnprotectedURL))
+    // parameter substitutions in domains not known to Approov (which therefore might not be pinned).
+    // Message signing is skipped here because it requires token artifacts (the public key for install signing
+    // or the mksid for account signing) that are only present on a successful token fetch.
+    if (status != ApproovTokenFetchStatusSuccess) {
         return updatedRequest;
+    }
+
+    NSMutableArray<NSString *> *substitutedHeaderKeys = [[NSMutableArray alloc] init];
+    NSMutableArray<NSString *> *substitutedQueryParamKeys = [[NSMutableArray alloc] init];
+    NSString *originalURL = nil;
 
     // obtain a copy of the substitution headers in a thread safe way
     NSDictionary<NSString *, NSString *> *subsHeaders;
@@ -821,18 +1215,23 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     // we now deal with any header substitutions, which may require further fetches but these
     // should be using cached results
     for (NSString *header in subsHeaders) {
-        NSString *prefix = [substitutionHeaders objectForKey:header];
-        NSString *value = allHeaders[header];
+        NSString *prefix = [subsHeaders objectForKey:header];
+        NSString *value = [ApproovService valueForHTTPHeaderField:header
+                                                        inRequest:request
+                                                     sessionConfig:sessionConfig];
         if ((value != nil) && (prefix != nil) && (value.length > prefix.length) &&
             (([prefix length] == 0) || [value hasPrefix:prefix])) {
             // the request contains the header we want to replace
             result = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
             status = [result status];
-            NSLog(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+            ApproovLogInfo(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
             if (status == ApproovTokenFetchStatusSuccess) {
-                // update the header value with the actual secret
-                [updatedRequest setValue:[NSString stringWithFormat:@"%@%@", prefix, result.secureString]
-                    forHTTPHeaderField:header];
+                if (result.secureString.length > 0) {
+                    // update the header value with the actual secret
+                    [updatedRequest setValue:[NSString stringWithFormat:@"%@%@", prefix, result.secureString]
+                        forHTTPHeaderField:header];
+                    [substitutedHeaderKeys addObject:header];
+                }
             } else if (status == ApproovTokenFetchStatusRejected) {
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Header substitution rejection: %@ %@",
@@ -844,13 +1243,11 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
                        (status == ApproovTokenFetchStatusMITMDetected)) {
                 // we are unable to get the secure string due to network conditions so the request can
-                // be retried by the user later - unless overridden
-                if (!proceedOnNetworkFail) {
-                    NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
-                        [Approov stringFromApproovTokenFetchStatus:status]];
-                    *error = [ApproovService createErrorWithType:@"network" message:details];
-                    return request;
-                }
+                // be retried by the user later
+                NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Header substitution error: %@",
@@ -870,7 +1267,8 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
     // we now deal with any query parameter substitutions, which may require further fetches but these
     // should be using cached results
     for (NSString *key in subsQueryParams) {
-        NSString *pattern = [NSString stringWithFormat:@"[\\?&]%@=([^&;]+)", key];
+        NSString *pattern = [NSString stringWithFormat:@"[\\?&]%@=([^&;]+)",
+            [NSRegularExpression escapedPatternForString:key]];
         NSError *regexError = nil;
         NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
         if (regexError) {
@@ -885,11 +1283,17 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
             NSString *matchText = [url substringWithRange:[match rangeAtIndex:1]];
             result = [Approov fetchSecureStringAndWait:matchText :nil];
             status = [result status];
-            NSLog(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
+            ApproovLogInfo(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
             if (status == ApproovTokenFetchStatusSuccess) {
-                // update the URL with the actual secret
-                url = [url stringByReplacingCharactersInRange:[match rangeAtIndex:1] withString:result.secureString];
-                [updatedRequest setURL:[NSURL URLWithString:url]];
+                if (result.secureString.length > 0) {
+                    // update the URL with the actual secret
+                    if (originalURL == nil) {
+                        originalURL = url;
+                    }
+                    url = [url stringByReplacingCharactersInRange:[match rangeAtIndex:1] withString:result.secureString];
+                    [updatedRequest setURL:[NSURL URLWithString:url]];
+                    [substitutedQueryParamKeys addObject:key];
+                }
             } else if (status == ApproovTokenFetchStatusRejected) {
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution rejection %@ %@",
@@ -901,13 +1305,11 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
                        (status == ApproovTokenFetchStatusMITMDetected)) {
                 // we are unable to get the secure string due to network conditions so the request can
-                // be retried by the user later - unless overridden
-                if (!proceedOnNetworkFail) {
-                    NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
-                        [Approov stringFromApproovTokenFetchStatus:status]];
-                    *error = [ApproovService createErrorWithType:@"network" message:details];
-                    return request;
-                }
+                // be retried by the user later
+                NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
+                    [Approov stringFromApproovTokenFetchStatus:status]];
+                *error = [ApproovService createErrorWithType:@"network" message:details];
+                return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution error: %@",
@@ -917,6 +1319,10 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
             }
         }
     }
+    [ApproovService applyMessageSigningIfEnabledToRequest:updatedRequest
+                                       substitutedHeaders:substitutedHeaderKeys
+                                              originalURL:originalURL
+                                 substitutedQueryParams:substitutedQueryParamKeys];
     return updatedRequest;
 }
 
