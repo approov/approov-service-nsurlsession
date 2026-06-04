@@ -4,7 +4,7 @@ import Foundation
 import ApproovNSURLSessionObjC
 #endif
 
-@objc public class ApproovServiceMutatorBridge: NSObject, ApproovServiceMutatorBridgeProtocol {
+@objc(ApproovServiceMutatorBridge) public class ApproovServiceMutatorBridge: NSObject, ApproovServiceMutatorBridgeProtocol {
     @objc public static let shared = ApproovServiceMutatorBridge()
 
     private let defaultMessageSigner: ApproovDefaultMessageSigning
