@@ -17,13 +17,8 @@ Pod::Spec.new do |s|
 
     # Specify the source code paths for the combined target
     s.source_files = [
-      'ApproovNSURLSession.{h,m}',
-      'ApproovService.{h,m}',
-      'ApproovPinningURLSessionDelegate.{h,m}',
-      'ApproovSessionTaskObserver.{h,m}',
-      'RSSwizzle.{h,m}',
-      'ApproovServiceMutatorBridge.swift',
-      'ApproovNSURLSessionSwift/**/*.{swift}'
+      'Sources/ApproovNSURLSessionObjC/**/*.{h,m}',
+      'Sources/ApproovNSURLSession/**/*.{swift}'
     ]
     s.swift_version = '5.0'
     s.static_framework = true

@@ -34,6 +34,30 @@ typedef NS_ENUM(NSInteger, ApproovLogLevel) {
     ApproovLogLevelDebug,
 };
 
+#define ApproovLogError(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelError format:(fmt), ##__VA_ARGS__]
+#define ApproovLogWarning(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelWarning format:(fmt), ##__VA_ARGS__]
+#define ApproovLogInfo(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelInfo format:(fmt), ##__VA_ARGS__]
+#define ApproovLogDebug(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelDebug format:(fmt), ##__VA_ARGS__]
+
+@class ApproovTokenFetchResult;
+
+@protocol ApproovServiceMutatorBridgeProtocol <NSObject>
+- (void)setUseAccountSigning:(BOOL)useAccountSigning;
+- (void)setBodyDigestRequired:(BOOL)bodyDigestRequired;
+- (void)setBodyDigestEnabled:(BOOL)bodyDigestEnabled;
+- (void)resetServiceMutator;
+- (void)processRequest:(NSMutableURLRequest * _Nonnull)request tokenHeader:(NSString * _Nullable)tokenHeader;
+- (void)processRequest:(NSMutableURLRequest * _Nonnull)request tokenHeader:(NSString * _Nullable)tokenHeader traceIDHeader:(NSString * _Nullable)traceIDHeader;
+- (void)processRequest:(NSMutableURLRequest * _Nonnull)request
+           tokenHeader:(NSString * _Nullable)tokenHeader
+         traceIDHeader:(NSString * _Nullable)traceIDHeader
+    substitutionHeaders:(NSArray<NSString *> * _Nullable)substitutionHeaders
+           originalURL:(NSString * _Nullable)originalURL
+substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams;
+- (BOOL)shouldProcessPinningRequest:(NSURLRequest * _Nonnull)request;
+- (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+@end
+
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
@@ -87,6 +111,7 @@ typedef NS_ENUM(NSInteger, ApproovLogLevel) {
         sessionConfig:(NSURLSessionConfiguration *)sessionConfig error:(NSError **)error;
 + (BOOL)sharedUseApproovStatusIfNoToken;
 + (NSMutableSet<NSString *> *)sharedExclusionURLRegexs;
++ (id<ApproovServiceMutatorBridgeProtocol> _Nullable)mutatorBridge;
 @end
 
 #endif

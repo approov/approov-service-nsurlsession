@@ -16,6 +16,9 @@
 
 import Approov
 import Foundation
+#if canImport(ApproovNSURLSessionObjC)
+import ApproovNSURLSessionObjC
+#endif
 
 /**
  * ApproovServiceMutator provides an interface for modifying the behavior of

@@ -1,7 +1,10 @@
 import Approov
 import Foundation
+#if canImport(ApproovNSURLSessionObjC)
+import ApproovNSURLSessionObjC
+#endif
 
-@objc public class ApproovServiceMutatorBridge: NSObject {
+@objc public class ApproovServiceMutatorBridge: NSObject, ApproovServiceMutatorBridgeProtocol {
     @objc public static let shared = ApproovServiceMutatorBridge()
 
     private let defaultMessageSigner: ApproovDefaultMessageSigning
@@ -146,25 +149,25 @@ import Foundation
         }
     }
 
-    @objc public func shouldProcessPinningRequest(_ request: NSURLRequest) -> Bool {
-        return serviceMutator.handlePinningShouldProcessRequest(request as URLRequest)
+    @objc public func shouldProcessPinningRequest(_ request: URLRequest) -> Bool {
+        return serviceMutator.handlePinningShouldProcessRequest(request)
     }
 
-    @objc public func handleInterceptorFetchTokenResult(_ result: Any, url: String, errorPointer: NSErrorPointer) -> Bool {
+    @objc public func handleInterceptorFetchTokenResult(_ result: Any, url: String, errorPointer: NSErrorPointer) -> Int {
         guard let fetchResult = result as? ApproovTokenFetchResult else {
             if ApproovService.shouldLog(at: .error) {
                 NSLog("[ApproovServiceMutatorBridge] Invalid result type passed to handleInterceptorFetchTokenResult")
             }
-            return false
+            return 0
         }
 
         do {
-            return try serviceMutator.handleInterceptorFetchTokenResult(fetchResult, url: url)
+            return try serviceMutator.handleInterceptorFetchTokenResult(fetchResult, url: url) ? 1 : 0
         } catch {
             if errorPointer != nil {
                 errorPointer?.pointee = error as NSError
             }
-            return false
+            return 0
         }
     }
 }

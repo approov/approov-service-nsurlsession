@@ -15,13 +15,13 @@
 // THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-#import "Approov/Approov.h"
+#import <Approov/Approov.h>
 #import "ApproovService.h"
 #import "ApproovSessionTaskObserver.h"
 #import "RSSwizzle.h"
 #if __has_include(<approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>)
 #import <approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>
-#else
+#elif __has_include("approov_service_nsurlsession-Swift.h")
 #import "approov_service_nsurlsession-Swift.h"
 #endif
 #import <stdarg.h>
@@ -29,16 +29,26 @@
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @implementation ApproovService
 
++ (id<ApproovServiceMutatorBridgeProtocol> _Nullable)mutatorBridge {
+    static id<ApproovServiceMutatorBridgeProtocol> bridge = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class bridgeClass = NSClassFromString(@"ApproovServiceMutatorBridge");
+        if (bridgeClass) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            bridge = [bridgeClass performSelector:NSSelectorFromString(@"shared")];
+            #pragma clang diagnostic pop
+        }
+    });
+    return bridge;
+}
+
 // tag for logging
 static const NSString *TAG = @"ApproovService";
 
 // service layer logging level, defaulting to informational output for backward compatibility
 static ApproovLogLevel loggingLevel = ApproovLogLevelInfo;
-
-#define ApproovLogError(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelError format:(fmt), ##__VA_ARGS__]
-#define ApproovLogWarning(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelWarning format:(fmt), ##__VA_ARGS__]
-#define ApproovLogInfo(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelInfo format:(fmt), ##__VA_ARGS__]
-#define ApproovLogDebug(fmt, ...) [ApproovService logWithLevel:ApproovLogLevelDebug format:(fmt), ##__VA_ARGS__]
 
 // header on which the Approov token is added
 static NSString *approovTokenHeader = @"Approov-Token";
@@ -298,7 +308,7 @@ static BOOL isSessionTaskSwizzled = NO;
         substitutionQueryParams = [[NSMutableSet alloc] init];
 
         // Reset the service mutator
-        [[ApproovServiceMutatorBridge shared] resetServiceMutator];
+        [[ApproovService mutatorBridge] resetServiceMutator];
 
         if (configString.length > 0) {
             if (!sdkInitialized) {
@@ -1035,17 +1045,17 @@ static BOOL isSessionTaskSwizzled = NO;
     if (mode == ApproovMessageSigningModeDisabled) {
         return;
     }
-
     BOOL useAccountSigning = (mode == ApproovMessageSigningModeAccount);
-    [[ApproovServiceMutatorBridge shared] setUseAccountSigning:useAccountSigning];
-    [[ApproovServiceMutatorBridge shared] setBodyDigestEnabled:[ApproovService getMessageSigningBodyDigestEnabled]];
-    [[ApproovServiceMutatorBridge shared] setBodyDigestRequired:[ApproovService getMessageSigningBodyDigestRequired]];
-    [[ApproovServiceMutatorBridge shared] processRequest:request
-                                             tokenHeader:[ApproovService getApproovTokenHeader]
-                                          traceIDHeader:[ApproovService getApproovTraceIDHeader]
-                                   substitutionHeaders:substitutedHeaders
-                                           originalURL:originalURL
-                              substitutionQueryParams:substitutedQueryParams];
+    id<ApproovServiceMutatorBridgeProtocol> bridge = [ApproovService mutatorBridge];
+    [bridge setUseAccountSigning:useAccountSigning];
+    [bridge setBodyDigestEnabled:[ApproovService getMessageSigningBodyDigestEnabled]];
+    [bridge setBodyDigestRequired:[ApproovService getMessageSigningBodyDigestRequired]];
+    [bridge processRequest:request
+               tokenHeader:[ApproovService getApproovTokenHeader]
+             traceIDHeader:[ApproovService getApproovTraceIDHeader]
+       substitutionHeaders:substitutedHeaders
+               originalURL:originalURL
+   substitutionQueryParams:substitutedQueryParams];
 }
 
 /**
@@ -1137,7 +1147,7 @@ static BOOL isSessionTaskSwizzled = NO;
         NSError *mutatorError = nil;
         BOOL shouldProceed = NO;
         @try {
-            shouldProceed = [[ApproovServiceMutatorBridge shared]
+            shouldProceed = [[ApproovService mutatorBridge]
                 handleInterceptorFetchTokenResult:result
                                               url:url
                                      errorPointer:&mutatorError];

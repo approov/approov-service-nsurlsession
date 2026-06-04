@@ -19,7 +19,7 @@
 #import "ApproovService.h"
 #if __has_include(<approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>)
 #import <approov_service_nsurlsession/approov_service_nsurlsession-Swift.h>
-#else
+#elif __has_include("approov_service_nsurlsession-Swift.h")
 #import "approov_service_nsurlsession-Swift.h"
 #endif
 #import <CommonCrypto/CommonCrypto.h>
@@ -493,7 +493,7 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     NSURL *requestURL = components.URL;
     if (requestURL != nil) {
         NSURLRequest *request = [NSURLRequest requestWithURL:requestURL];
-        if (![[ApproovServiceMutatorBridge shared] shouldProcessPinningRequest:request]) {
+        if (![[ApproovService mutatorBridge] shouldProcessPinningRequest:request]) {
             [ApproovService logWithLevel:ApproovLogLevelInfo format:@"%@: pinning skipped for %@", TAG, challenge.protectionSpace.host];
             return serverTrust;
         }

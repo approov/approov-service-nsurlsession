@@ -17,6 +17,9 @@
 import CommonCrypto
 import Foundation
 import os.log
+#if canImport(ApproovNSURLSessionObjC)
+import ApproovNSURLSessionObjC
+#endif
 
 /**
  * Provides a base implementation of message signing for Approov when using

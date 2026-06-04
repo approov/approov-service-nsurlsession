@@ -118,6 +118,7 @@ static dispatch_queue_t updateRequestQueue;
             NSError *error = nil;
             NSURLRequest *newRequest = [ApproovService updateRequestWithApproov:sessionTask.currentRequest
                                                                   sessionConfig:sessionConfig error:&error];
+            NSLog(@"[TESTLOG] Outgoing request headers for %@: %@", newRequest.URL, newRequest.allHTTPHeaderFields);
              
             // handle the result from the request update
             if (error != nil) {
