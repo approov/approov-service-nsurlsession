@@ -46,3 +46,33 @@ If a request is allowed to proceed without an Approov token, or a token fetch re
 ```
 
 For example, if the SDK reports `MITM_DETECTED` and the mutator allows the request to proceed, the outgoing `Approov-Token` header becomes `Bearer MITM_DETECTED`. If the mutator blocks the request, no fallback token header is emitted.
+
+## Hybrid App Module Conflict Warning (SPM)
+
+If you are developing a hybrid app (for instance, you are migrating an existing Objective-C app that uses `NSURLSession` to Swift/URLSession, or are using both service layers simultaneously) and integrate both the [`approov-service-nsurlsession`](https://github.com/approov/approov-service-nsurlsession) and [`approov-service-urlsession`](https://github.com/approov/approov-service-urlsession) libraries using Swift Package Manager, you will encounter a class name collision because both libraries define a class named `ApproovService`.
+
+### The Issue
+Due to Swift Package Manager and the Swift compiler's bridging rules, if you call `ApproovService.initialize(...)` without a module prefix, the compiler may resolve `ApproovService` to `ApproovURLSessionPackage.ApproovService` instead of `ApproovNSURLSessionObjC.ApproovService` depending on the parameter label signature (e.g. `config:` vs the bridged ObjC signature).
+
+### Consequences
+If the compiler resolves `ApproovService` to the Swift URLSession module's class, the Objective-C `ApproovService` remains uninitialized (`isInitialized` remains `NO`). Consequently, any requests made through `ApproovNSURLSession` will silently bypass all Approov protections (no tokens will be fetched or injected, no message signing will occur, and dynamic pinning will be skipped).
+
+### Solution
+To prevent this, you must explicitly qualify all references to the Objective-C service layer class in your Swift code by using the `ApproovNSURLSessionObjC` module prefix:
+
+```swift
+import ApproovNSURLSession
+import ApproovNSURLSessionObjC
+import ApproovURLSessionPackage
+
+// Initialize the Objective-C service layer
+var error: NSError?
+ApproovNSURLSessionObjC.ApproovService.initialize("YOUR_CONFIG_STRING", comment: "options", error: &error)
+
+// Enable message signing in the Objective-C layer
+ApproovNSURLSessionObjC.ApproovService.setMessageSigningMode(.install)
+
+// Add substitution headers in the Objective-C layer
+ApproovNSURLSessionObjC.ApproovService.addSubstitutionHeader("Api-Key", requiredPrefix: "")
+```
+
