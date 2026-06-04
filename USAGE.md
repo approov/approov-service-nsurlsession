@@ -11,7 +11,22 @@ NSError *error = nil;
 [ApproovService initialize:approovConfigString comment:@"options:debug" error:&error];
 if (error != nil) {
     NSLog(@"Approov initialization failed: %@", error.localizedDescription);
+    // Safe production fallback: log to telemetry and continue without Approov.
+    // Crashing the app would render it unusable for your users.
 }
+```
+
+### Swift Bridge Lookup Failures & Production Fail-Safe
+
+Due to the hybrid Swift/Objective-C architecture of this service layer, the Objective-C class `ApproovService` locates the Swift class `ApproovServiceMutatorBridge` dynamically at runtime. This lookup can fail and return an initialization error in 3 concrete scenarios:
+1. **Dead Code Stripping**: The Swift target (`ApproovNSURLSession`) or bridge class is stripped by the linker because no Swift symbols are statically referenced by the app source code.
+2. **Missing Linkage / Target Misconfiguration**: The app target does not link the Swift product target `ApproovNSURLSession` or package product.
+3. **Missing `@objc` Attribute**: Swift runtime namespacing prevents `NSClassFromString` from matching the flat name `ApproovServiceMutatorBridge` (e.g. if the `@objc(ApproovServiceMutatorBridge)` annotation is omitted from the Swift source).
+
+> [!WARNING]
+> In released production applications, do not crash or assert if `initialize` returns an error. Instead, log the error and allow the application to proceed.
+> 
+> Since initialization failed, `isInitialized` and `isApproovEnabled` will remain `NO`. The service layer will automatically enter an unprotected fallback mode where requests are forwarded normally without Approov tokens, headers, or pinning checks. This ensures your application remains functional even if the Swift bridge target is misconfigured or stripped.
 ```
 
 For local bypass or tests that should behave like a normal NSURLSession wrapper, initialize with an empty config string:

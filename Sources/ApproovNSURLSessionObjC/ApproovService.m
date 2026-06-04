@@ -277,6 +277,14 @@ static BOOL isSessionTaskSwizzled = NO;
         // failure surfaces as localError.
         BOOL sdkInitialized = YES;
         if (configString.length > 0) {
+            if ([ApproovService mutatorBridge] == nil) {
+                ApproovLogError(@"%@: Approov initialization failed: ApproovServiceMutatorBridge class not found. Ensure the Swift target is linked and not dead-code stripped.", TAG);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"general"
+                                  message:@"ApproovServiceMutatorBridge class not found. Ensure the Swift target is linked and not dead-code stripped."];
+                }
+                return;
+            }
             NSError *localError = nil;
             sdkInitialized = [Approov initialize:configString updateConfig:@"auto"
                                          comment:comment error:&localError];

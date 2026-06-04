@@ -15,7 +15,7 @@ NSError *error = nil;
 
 ### `+initialize:comment:error:`
 
-Initializes the service layer and optionally the native Approov SDK. On every call the service layer resets all internal state before forwarding to the SDK — there are no service-layer same-config or reinit guards. The SDK itself determines whether a repeated initialization is compatible and returns `NO` with a `nil` error when it was already initialized with the same configuration. Any real failure (different-config conflict, malformed config, SDK error) produces a non-nil `NSError` and leaves the service layer uninitialized.
+Initializes the service layer and optionally the native Approov SDK. On every call the service layer resets all internal state before forwarding to the SDK — there are no service-layer same-config or reinit guards. The SDK itself determines whether a repeated initialization is compatible and returns `NO` with a `nil` error when it was already initialized with the same configuration. Any real failure (different-config conflict, malformed config, SDK error, or a missing runtime bridge) produces a non-nil `NSError` and leaves the service layer uninitialized.
 
 ```objective-c
 NSError *error = nil;
@@ -24,6 +24,20 @@ if (error != nil) {
     // initialization failed — service layer is uninitialized
 }
 ```
+
+#### Bridge Lookup Failures (Hybrid Architecture)
+
+Due to the hybrid Swift/Objective-C architecture of the `approov-service-nsurlsession` service layer itself, the Objective-C core (`ApproovService`) relies on dynamic class lookup (`NSClassFromString(@"ApproovServiceMutatorBridge")`) to load request mutation and decision logic from the Swift module. This class lookup can fail at runtime in 3 concrete scenarios:
+1. **Dead Code Stripping**: The linker strips the Swift target (`ApproovNSURLSession`) or its classes because no Swift symbols are statically/directly referenced in the application source code.
+2. **Target Misconfiguration / Missing Linkage**: The main application target is not configured to link against the Swift product target `ApproovNSURLSession` or package library.
+3. **Missing `@objc` Attribute**: Swift runtime namespacing prevents `NSClassFromString` from resolving the class name if the `@objc(ApproovServiceMutatorBridge)` decorator is missing or removed from the Swift source.
+
+#### Production Fail-Safe Recommendation
+
+> [!WARNING]
+> Crashing the application due to an initialization failure would render a released production application unusable. If this is a released production application, the recommended option is to handle any initialization error by logging the error to your telemetry and safely continuing execution without Approov protection.
+> 
+> Because initialization did not complete, `isInitialized` and `isApproovEnabled` evaluate to `NO`. In this state, all subsequent requests made via `ApproovNSURLSession` will automatically bypass Approov protection and proceed unprotected, keeping the application functional for your users.
 
 **`config` parameter:** Pass a non-empty Approov configuration string for full SDK protection, or `@""` for empty-config bypass mode. The parameter is `_Nonnull`; passing `nil` is a compile-time error.
 
