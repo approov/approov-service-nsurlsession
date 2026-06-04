@@ -16,8 +16,9 @@
 
 ### Changed
 
-- Simplified `initialize:comment:error:` — removed all service-layer re-initialization guards (`reinit`/`options:` comment prefix checks, same-config short-circuit, different-config early error). The service layer now always resets its own state and forwards the call to the platform SDK. The SDK returns `NO` with `nil` error if already initialized with the same config (service layer logs and continues); a non-nil error indicates a genuine failure (e.g. different config conflict).
-- `nil` config is now accepted and treated as an empty string (bypass mode); a warning is logged directing callers to pass `@""` explicitly. The `comment` parameter is passed through to the native SDK unchanged — `nil` and `@""` are semantically distinct at the SDK level and must not be coerced.
+- Simplified `initialize:comment:error:` — removed all service-layer re-initialization guards (`reinit`/`options:` comment prefix checks, same-config short-circuit, different-config early error). The service layer now forwards the config to the platform SDK and only resets internal state on success.
+- Restores the empty-config reinitialization bypass guard (ignoring empty config after valid config).
+- Automatically resets the custom service mutator back to the default mutator on any successful initialization.
 - Moved Swift support files out of the legacy `ApproovURLSession` folder into `ApproovNSURLSessionSwift`.
 - Updated package source paths to reflect the current Swift support folder layout.
 - Updated REFERENCE.md with request lifecycle, mutator behavior, message signing, logging, pinning, and initialization contract documentation.

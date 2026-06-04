@@ -254,23 +254,22 @@ static BOOL isSessionTaskSwizzled = NO;
             *error = nil;
         }
 
-        // Reset service layer state
-        isInitialized = NO;
-        isApproovEnabled = NO;
-        initialConfigString = nil;
-        sessionTaskObserver = nil;
-        substitutionHeaders = [[NSMutableDictionary alloc] init];
-        exclusionURLRegexs = [[NSMutableSet alloc] init];
-        substitutionQueryParams = [[NSMutableSet alloc] init];
+        // If we are already initialized with a valid config, ignore any subsequent
+        // empty config initialization
+        if (isInitialized && isApproovEnabled && (configString.length == 0)) {
+            ApproovLogInfo(@"%@: ApproovService already initialized with a valid config; ignoring empty configuration", TAG);
+            return;
+        }
 
         // Initialize the platform SDK if not in bypass mode (empty config).
         // The SDK returns YES if initialization succeeded, NO if already initialized
         // with the same config even by another service layer instance. Any other
         // failure surfaces as localError.
+        BOOL sdkInitialized = YES;
         if (configString.length > 0) {
             NSError *localError = nil;
-            BOOL sdkInitialized = [Approov initialize:configString updateConfig:@"auto"
-                                              comment:comment error:&localError];
+            sdkInitialized = [Approov initialize:configString updateConfig:@"auto"
+                                         comment:comment error:&localError];
             if (localError != nil) {
                 ApproovLogError(@"%@: Approov initialization failed: %@", TAG, localError.localizedDescription);
                 if (error != nil) {
@@ -279,21 +278,42 @@ static BOOL isSessionTaskSwizzled = NO;
                 }
                 return;
             }
+        }
+
+        // SDK succeeded (or bypass) — now reset and commit new service-layer state.
+        isInitialized = NO;
+        isApproovEnabled = NO;
+        initialConfigString = nil;
+        sessionTaskObserver = nil;
+        approovTokenHeader = @"Approov-Token";
+        approovTokenPrefix = @"";
+        approovTraceIDHeader = @"Approov-TraceID";
+        bindingHeader = @"";
+        useApproovStatusIfNoToken = NO;
+        messageSigningMode = ApproovMessageSigningModeDisabled;
+        messageSigningBodyDigestEnabled = YES;
+        messageSigningBodyDigestRequired = NO;
+        substitutionHeaders = [[NSMutableDictionary alloc] init];
+        exclusionURLRegexs = [[NSMutableSet alloc] init];
+        substitutionQueryParams = [[NSMutableSet alloc] init];
+
+        // Reset the service mutator
+        [[ApproovServiceMutatorBridge shared] resetServiceMutator];
+
+        if (configString.length > 0) {
             if (!sdkInitialized) {
                 ApproovLogDebug(@"%@: Approov SDK already initialized", TAG);
             }
-            [Approov setUserProperty:initializerLock];
-            if (sessionTaskObserver == nil) {
-                sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
-            }
+            [Approov setUserProperty:(NSString *)initializerLock];
+            sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
             [ApproovService swizzleSessionTask];
         } else {
             ApproovLogInfo(@"%@: initialized without Approov SDK protection", TAG);
         }
 
         initialConfigString = configString;
-        isInitialized = YES;
         isApproovEnabled = (configString.length > 0);
+        isInitialized = YES;
     }
 }
 
