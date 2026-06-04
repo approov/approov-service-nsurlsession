@@ -34,7 +34,6 @@
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         Class bridgeClass = NSClassFromString(@"ApproovServiceMutatorBridge");
-        NSLog(@"[ApproovService] mutatorBridge dynamic class lookup: %@", bridgeClass);
         if (bridgeClass) {
             #pragma clang diagnostic push
             #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
