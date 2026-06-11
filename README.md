@@ -81,7 +81,7 @@ To actually protect your APIs and/or secrets there are some further steps. Appro
 
 Note that it is possible to use both approaches side-by-side in the same app.
 
-See [REFERENCE](https://github.com/approov/approov-service-nsurlsession/blob/main/REFERENCE.md) for a complete list of all of the `ApproovService` methods.
+See [REFERENCE](https://github.com/approov/approov-service-nsurlsession/blob/main/REFERENCE.md) for a complete list of all of the `ApproovService` methods, [USAGE](https://github.com/approov/approov-service-nsurlsession/blob/main/USAGE.md) for detailed usage examples, and [CHANGELOG](https://github.com/approov/approov-service-nsurlsession/blob/main/CHANGELOG.md) for version history.
 
 ## Delegates
 
