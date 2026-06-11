@@ -152,20 +152,10 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]) {
         [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
     } else if (completionHandler != nil) {
-        if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
-            // Apply the same Approov pin verification as the session-level handler
-            NSError *error;
-            SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
-            if (error != nil) {
-                [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: task pinning check error: %@", TAG, error.localizedDescription];
-                completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
-            } else if (serverTrust == nil) {
-                [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: task pins rejected", TAG];
-                completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
-            } else {
-                [ApproovService logWithLevel:ApproovLogLevelDebug format:@"%@: task pins accepted", TAG];
-                completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, NULL);
-            }
+        SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
+        if (serverTrust != nil &&
+            [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
+            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
         } else {
             completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
         }
