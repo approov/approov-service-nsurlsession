@@ -152,10 +152,20 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]) {
         [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
     } else if (completionHandler != nil) {
-        SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
-        if (serverTrust != nil &&
-            [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
-            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+        if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
+            // Apply the same Approov pin verification as the session-level handler
+            NSError *error;
+            SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
+            if (error != nil) {
+                [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: task pinning check error: %@", TAG, error.localizedDescription];
+                completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
+            } else if (serverTrust == nil) {
+                [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: task pins rejected", TAG];
+                completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
+            } else {
+                [ApproovService logWithLevel:ApproovLogLevelDebug format:@"%@: task pins accepted", TAG];
+                completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, NULL);
+            }
         } else {
             completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
         }
@@ -436,16 +446,21 @@ typedef NS_ENUM(NSUInteger, SecCertificateRefError)
     
     // get the SPKI header depending on the public key's type and size
     NSData *spkiHeader = [self publicKeyInfoHeaderForKey:publicKey];
-    if (spkiHeader == nil)
+    if (spkiHeader == nil) {
+        CFRelease(publicKey);
         return nil;
+    }
     
     // combine the public key header and the public key data to form the public key info
     CFDataRef publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil);
-    if (publicKeyData == nil)
+    if (publicKeyData == nil) {
+        CFRelease(publicKey);
         return nil;
+    }
     NSMutableData *returnData = [NSMutableData dataWithData:spkiHeader];
     [returnData appendData:(__bridge NSData * _Nonnull)(publicKeyData)];
     CFRelease(publicKeyData);
+    CFRelease(publicKey);
     return [NSData dataWithData:returnData];
 }
 

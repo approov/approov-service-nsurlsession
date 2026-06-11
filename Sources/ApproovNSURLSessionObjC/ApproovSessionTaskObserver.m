@@ -60,7 +60,7 @@ static dispatch_queue_t updateRequestQueue;
  * We rely on the fact that ARC does not relocate objects so the address should be constant once allocated.
  *
  * @param sessionTask is the task whose ID is to be obtained
- * @return the idnetifier for the task
+ * @return the identifier for the task
  */
 - (NSString *)sessionTaskID:(NSURLSessionTask *)sessionTask {
     return [NSString stringWithFormat:@"#%lu:%08lx",
@@ -118,7 +118,6 @@ static dispatch_queue_t updateRequestQueue;
             NSError *error = nil;
             NSURLRequest *newRequest = [ApproovService updateRequestWithApproov:sessionTask.currentRequest
                                                                   sessionConfig:sessionConfig error:&error];
-            NSLog(@"[TESTLOG] Outgoing request headers for %@: %@", newRequest.URL, newRequest.allHTTPHeaderFields);
              
             // handle the result from the request update
             if (error != nil) {
