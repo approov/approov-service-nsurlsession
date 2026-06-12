@@ -26,7 +26,6 @@ jobs:
       # TESTING ONLY: local mini-SDK fixture for service-layer contract tests.
       # Production SPM and CocoaPods integrations use the real Approov SDK.
       APPROOV_USE_MINI_SDK: "1"
-      APPROOV_MINI_SDK_PATH: ${{ vars.APPROOV_MINI_SDK_PATH }}
 
     steps:
       # -----------------------------------------------------------------------
@@ -51,6 +50,9 @@ jobs:
           token: ${{ secrets.CORE_SERVICE_LAYERS_TESTING_PAT }}
           ref: 1dbc1bba2135f20cd7a9868ac2eeea881906310c
           path: core-service-layers-testing
+
+      - name: Configure mini-SDK path
+        run: echo "APPROOV_MINI_SDK_PATH=$GITHUB_WORKSPACE/core-service-layers-testing/mini-sdk/ios" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
       # 3. Verify worker endpoints (with auto-redeploy)
