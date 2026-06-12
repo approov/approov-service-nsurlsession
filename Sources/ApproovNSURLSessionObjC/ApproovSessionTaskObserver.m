@@ -60,7 +60,7 @@ static dispatch_queue_t updateRequestQueue;
  * We rely on the fact that ARC does not relocate objects so the address should be constant once allocated.
  *
  * @param sessionTask is the task whose ID is to be obtained
- * @return the idnetifier for the task
+ * @return the identifier for the task
  */
 - (NSString *)sessionTaskID:(NSURLSessionTask *)sessionTask {
     return [NSString stringWithFormat:@"#%lu:%08lx",
@@ -126,7 +126,7 @@ static dispatch_queue_t updateRequestQueue;
                      completionHandler(nil, nil, error);
                  else
                      [sessionTask cancel];
-                 NSLog(@"%@: session task %@ cancelled due to error", TAG, taskID);
+                 ApproovLogError(@"%@: session task %@ cancelled due to error", TAG, taskID);
             }
             else if ([sessionTask state] == NSURLSessionTaskStateSuspended) {
                  // the update was successful so now we need to update the original request, if the task
@@ -142,19 +142,19 @@ static dispatch_queue_t updateRequestQueue;
                  else {
                      // this means that NSURLRequest has removed the `updateCurrentRequest` method or we are observing an object that
                      // is not an instance of NSURLRequest
-                     NSLog(@"%@: unable to modify NSURLRequest, object instance is of type %@", TAG, NSStringFromClass([sessionTask class]));
+                     ApproovLogError(@"%@: unable to modify NSURLRequest, object instance is of type %@", TAG, NSStringFromClass([sessionTask class]));
                  }
                  
                  // the task can now be resumed with the updated request
-                 NSLog(@"%@: session task %@ request update completed", TAG, taskID);
+                 ApproovLogDebug(@"%@: session task %@ request update completed", TAG, taskID);
                  [sessionTask resume];
             }
             else
-                 NSLog(@"%@: session task %@ in unexpected state after request update", TAG, taskID);
+                 ApproovLogWarning(@"%@: session task %@ in unexpected state after request update", TAG, taskID);
         });
         
         // we have initiated the background thread and don't pass on the resume
-        NSLog(@"%@: session task %@ resume intercepted", TAG, taskID);
+        ApproovLogDebug(@"%@: session task %@ resume intercepted", TAG, taskID);
         return NO;
     }
     

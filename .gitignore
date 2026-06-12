@@ -1,1 +1,4 @@
 .DS_Store
+.build/
+Approov.xcframework/
+Package.resolved
