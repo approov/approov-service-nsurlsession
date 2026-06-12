@@ -13,6 +13,7 @@ let approovPackageName = useMiniSDK ? "mini-sdk-ios" : "approov-ios-sdk"
 let packagePlatforms: [SupportedPlatform] = [
     .iOS(.v11),
     .watchOS(.v9),
+    .macOS(.v13),
 ]
 
 var packageDependencies: [Package.Dependency] = [
