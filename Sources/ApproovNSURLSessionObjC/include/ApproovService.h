@@ -54,6 +54,13 @@ typedef NS_ENUM(NSInteger, ApproovLogLevel) {
     substitutionHeaders:(NSArray<NSString *> * _Nullable)substitutionHeaders
            originalURL:(NSString * _Nullable)originalURL
 substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams;
+- (NSInteger)processRequest:(NSMutableURLRequest * _Nonnull)request
+                tokenHeader:(NSString * _Nullable)tokenHeader
+              traceIDHeader:(NSString * _Nullable)traceIDHeader
+         substitutionHeaders:(NSArray<NSString *> * _Nullable)substitutionHeaders
+                originalURL:(NSString * _Nullable)originalURL
+    substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
+               errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 - (BOOL)shouldProcessPinningRequest:(NSURLRequest * _Nonnull)request;
 - (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 @end
@@ -77,7 +84,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)getBindingHeader;
 + (void)setApproovTokenHeader:(NSString *)newHeader;
 + (NSString *)getApproovTokenHeader;
-+ (void)setApproovTokenPrefix:(NSString *)newHeaderPrefix;
++ (void)setApproovTokenPrefix:(nullable NSString *)newHeaderPrefix;
 + (NSString *)getApproovTokenPrefix;
 + (void)setApproovTraceIDHeader:(NSString *)newHeader;
 + (NSString *)getApproovTraceIDHeader;
@@ -114,6 +121,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)sharedUseApproovStatusIfNoToken;
 + (NSMutableSet<NSString *> *)sharedExclusionURLRegexs;
 + (id<ApproovServiceMutatorBridgeProtocol> _Nullable)mutatorBridge;
+#ifdef APPROOV_TESTING
++ (void)resetForTesting;
++ (void)setMutatorBridgeOverrideForTesting:(id<ApproovServiceMutatorBridgeProtocol> _Nullable)bridge;
++ (void)clearMutatorBridgeOverrideForTesting;
++ (NSUInteger)sessionTaskSwizzleCountForTesting;
++ (BOOL)isSessionTaskSwizzledForTesting;
+#endif
 @end
 
 NS_ASSUME_NONNULL_END

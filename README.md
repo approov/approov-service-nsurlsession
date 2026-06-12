@@ -120,7 +120,7 @@ To use account message signing instead:
 
 The legacy `getMessageSignature:` method remains available as a compatibility alias for account message signing. New integrations should call `getAccountMessageSignature:` or `getInstallMessageSignature:` when generating signatures manually.
 
-Requests with replayable bodies include a generated `Content-Digest` header in the signature base. You can require body digest generation, causing signing to be skipped if a body cannot be safely read:
+Requests with replayable bodies include a generated `Content-Digest` header in the signature base. You can require body digest generation, causing the request to fail if a required digest cannot be safely generated:
 
 ```objective-c
 [ApproovService setMessageSigningBodyDigestRequired:YES];

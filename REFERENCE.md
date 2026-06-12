@@ -145,7 +145,7 @@ Configures automatic message signing for protected requests. Supported modes are
 - `ApproovMessageSigningModeInstall`
 - `ApproovMessageSigningModeAccount`
 
-Message signing is applied after token injection and secure string substitution, **only when the token fetch returns a `Success` status**. A non-success fetch (such as a network failure that the mutator allows through) does not produce signing because the required token artifacts — the public key embedded in the Approov token for install signing, or the `mksid` for account signing — are only available on a successful fetch. Without those artifacts the backend has no key material to verify any signature. If signing fails for any other reason, the request proceeds with the Approov mutation already applied but without signature headers.
+Message signing is applied after token injection and secure string substitution, **only when the token fetch returns a `Success` status**. A non-success fetch (such as a network failure that the mutator allows through) does not produce signing because the required token artifacts — the public key embedded in the Approov token for install signing, or the `mksid` for account signing — are only available on a successful fetch. Without those artifacts the backend has no key material to verify any signature. If the SDK cannot provide an install or account signature, the request proceeds unsigned and the backend decides whether to accept it. Other signing failures, including required body digest failures, unsupported signing algorithms, ASN.1 decode failures, or header serialization failures, are propagated as request failures.
 
 ### `+setMessageSigningBodyDigestEnabled:` and `+getMessageSigningBodyDigestEnabled`
 

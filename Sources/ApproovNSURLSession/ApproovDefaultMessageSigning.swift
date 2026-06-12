@@ -154,7 +154,8 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 sigId = "account"
                 guard let base64Signature = ApproovService.getAccountMessageSignature(message),
                       let decodedSignature = Data(base64Encoded: base64Signature) else {
-                    throw ApproovServiceError.permanentError(message: "Failed to generate HMAC signature")
+                    os_log("ApproovService: account message signature unavailable, skipping signing", type: .error)
+                    return request
                 }
                 signature = decodedSignature
             default:

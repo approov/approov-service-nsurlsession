@@ -2,26 +2,39 @@
 import Foundation
 import PackageDescription
 
-// The release tag for this version of ApproovNSURLSession
+// The release tag for this version of ApproovNSURLSession.
 let releaseTAG = "3.5.4"
-// SDK package version (used for both iOS and watchOS)
-let sdkVersion: Version = "3.5.3"
-let useMiniSDK = ProcessInfo.processInfo.environment["APPROOV_USE_MINI_SDK"] == "1"
-let miniSDKPath = ProcessInfo.processInfo.environment["APPROOV_MINI_SDK_PATH"] ?? "../core-service-layers-testing/mini-sdk/ios"
 
-let approovPackageName = useMiniSDK ? "mini-sdk-ios" : "approov-ios-sdk"
+// Production Approov SDK package version used by the public library products.
+let sdkVersion: Version = "3.5.3"
+let productionApproovPackageName = "approov-ios-sdk"
+
+// TESTING ONLY:
+// The mini-SDK is a local test fixture from core-service-layers-testing. It is
+// not a production dependency and must only be enabled by CI/local service-layer
+// contract tests that set APPROOV_USE_MINI_SDK=1 and APPROOV_MINI_SDK_PATH.
+let useMiniSDKForTests = ProcessInfo.processInfo.environment["APPROOV_USE_MINI_SDK"] == "1"
+let testingMiniSDKPackageName = "mini-sdk-ios"
+let testingMiniSDKPath = ProcessInfo.processInfo.environment["APPROOV_MINI_SDK_PATH"]
+let approovPackageName = useMiniSDKForTests ? testingMiniSDKPackageName : productionApproovPackageName
 let packagePlatforms: [SupportedPlatform] = [
     .iOS(.v11),
     .watchOS(.v9),
-    .macOS(.v13),
-]
+] + (useMiniSDKForTests ? [.macOS(.v13)] : [])
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-http-structured-headers.git", from: "1.0.0"),
 ]
-if useMiniSDK {
-    packageDependencies.append(.package(name: "mini-sdk-ios", path: miniSDKPath))
+
+if useMiniSDKForTests {
+    // TESTING ONLY: replaces the production SDK because SwiftPM requires product
+    // names to be unique and both packages expose a product named "Approov".
+    guard let testingMiniSDKPath, !testingMiniSDKPath.isEmpty else {
+        fatalError("APPROOV_MINI_SDK_PATH must be set when APPROOV_USE_MINI_SDK=1")
+    }
+    packageDependencies.append(.package(name: testingMiniSDKPackageName, path: testingMiniSDKPath))
 } else {
+    // Production dependency for public SPM consumers.
     packageDependencies.append(.package(url: "https://github.com/approov/approov-ios-sdk.git", exact: sdkVersion))
 }
 
@@ -31,7 +44,8 @@ var packageTargets: [Target] = [
         dependencies: [
             .product(name: "Approov", package: approovPackageName)
         ],
-        path: "Sources/ApproovNSURLSessionObjC"
+        path: "Sources/ApproovNSURLSessionObjC",
+        cSettings: useMiniSDKForTests ? [.define("APPROOV_TESTING")] : nil
     ),
     .target(
         name: "ApproovNSURLSession",
@@ -44,17 +58,18 @@ var packageTargets: [Target] = [
         exclude: ["util/sig/LICENSE"]
     )
 ]
-if useMiniSDK {
+if useMiniSDKForTests {
     packageTargets.append(
         .testTarget(
-            name: "ApproovNSURLSessionMiniSDKTests",
+            name: "ApproovNSURLSessionMiniSDKObjCTests",
             dependencies: [
                 "ApproovNSURLSession",
                 "ApproovNSURLSessionObjC",
-                .product(name: "Approov", package: "mini-sdk-ios"),
-                .product(name: "MiniSDKTestSupport", package: "mini-sdk-ios")
+                .product(name: "Approov", package: testingMiniSDKPackageName),
+                .product(name: "MiniSDKTestSupport", package: testingMiniSDKPackageName)
             ],
-            path: "Tests/ApproovNSURLSessionMiniSDKTests"
+            path: "Tests/ApproovNSURLSessionMiniSDKObjCTests",
+            cSettings: [.define("APPROOV_TESTING")]
         )
     )
 }

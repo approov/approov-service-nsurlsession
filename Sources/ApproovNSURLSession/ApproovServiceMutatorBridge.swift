@@ -78,16 +78,25 @@ import ApproovNSURLSessionObjC
     }
 
     @objc public func processRequest(_ request: NSMutableURLRequest, tokenHeader: String?) {
-        processRequest(request, tokenHeader: tokenHeader, traceIDHeader: nil)
+        var ignoredError: NSError?
+        _ = processRequest(request,
+                           tokenHeader: tokenHeader,
+                           traceIDHeader: nil,
+                           substitutionHeaders: nil,
+                           originalURL: nil,
+                           substitutionQueryParams: nil,
+                           errorPointer: &ignoredError)
     }
 
     @objc public func processRequest(_ request: NSMutableURLRequest, tokenHeader: String?, traceIDHeader: String?) {
-        processRequest(request,
-                       tokenHeader: tokenHeader,
-                       traceIDHeader: traceIDHeader,
-                       substitutionHeaders: nil,
-                       originalURL: nil,
-                       substitutionQueryParams: nil)
+        var ignoredError: NSError?
+        _ = processRequest(request,
+                           tokenHeader: tokenHeader,
+                           traceIDHeader: traceIDHeader,
+                           substitutionHeaders: nil,
+                           originalURL: nil,
+                           substitutionQueryParams: nil,
+                           errorPointer: &ignoredError)
     }
 
     @objc public func processRequest(_ request: NSMutableURLRequest,
@@ -96,6 +105,23 @@ import ApproovNSURLSessionObjC
                                      substitutionHeaders: [String]?,
                                      originalURL: String?,
                                      substitutionQueryParams: [String]?) {
+        var ignoredError: NSError?
+        _ = processRequest(request,
+                           tokenHeader: tokenHeader,
+                           traceIDHeader: traceIDHeader,
+                           substitutionHeaders: substitutionHeaders,
+                           originalURL: originalURL,
+                           substitutionQueryParams: substitutionQueryParams,
+                           errorPointer: &ignoredError)
+    }
+
+    @objc public func processRequest(_ request: NSMutableURLRequest,
+                                     tokenHeader: String?,
+                                     traceIDHeader: String?,
+                                     substitutionHeaders: [String]?,
+                                     originalURL: String?,
+                                     substitutionQueryParams: [String]?,
+                                     errorPointer: NSErrorPointer) -> Int {
         let urlRequest = request as URLRequest
         let changes = ApproovRequestMutations()
         if let tokenHeader,
@@ -142,10 +168,15 @@ import ApproovNSURLSessionObjC
             }
             request.timeoutInterval = processedRequest.timeoutInterval
             request.allHTTPHeaderFields = processedRequest.allHTTPHeaderFields
+            return 1
         } catch {
             if ApproovService.shouldLog(at: .error) {
                 NSLog("[ApproovServiceMutatorBridge] Error processing request: %@", error.localizedDescription)
             }
+            if errorPointer != nil {
+                errorPointer?.pointee = error as NSError
+            }
+            return 0
         }
     }
 

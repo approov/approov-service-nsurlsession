@@ -14,8 +14,8 @@ jobs:
       CURRENT_TAG: "${{ github.ref_name }}"
       # Worker endpoints: consumed from GitHub organisation variables first.
       # If the org variable is not set the value is an empty string; the probe
-      # step below falls back to the same hardcoded defaults that are baked into
-      # the mini-sdk (MiniAttesterConfig / Approov.m), keeping them in sync.
+      # step below falls back to the test worker defaults used by the local
+      # service-layer contract test fixture.
       # Worker management (create / redeploy) logic is centralized in the
       # core-service-layers-testing script, but invoked here when needed.
       TESTING_REPLY_URL: ${{ vars.TESTING_REPLY_URL }}
@@ -23,9 +23,10 @@ jobs:
       # Required for the redeploy script invocation on failure
       CLOUDFLARE_API_TOKEN_WORKERS_DEV: ${{ secrets.CLOUDFLARE_API_TOKEN_WORKERS_DEV }}
       CLOUDFLARE_ACCOUNT_ID_WORKERS_DEV: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_WORKERS_DEV }}
-      # iOS Mini-SDK configuration for Package.swift
+      # TESTING ONLY: local mini-SDK fixture for service-layer contract tests.
+      # Production SPM and CocoaPods integrations use the real Approov SDK.
       APPROOV_USE_MINI_SDK: "1"
-      APPROOV_MINI_SDK_PATH: "../core-service-layers-testing/mini-sdk/ios"
+      APPROOV_MINI_SDK_PATH: ${{ vars.APPROOV_MINI_SDK_PATH }}
 
     steps:
       # -----------------------------------------------------------------------
@@ -40,9 +41,8 @@ jobs:
           path: approov-service-nsurlsession
 
       # -----------------------------------------------------------------------
-      # 2. Clone core-service-layers-testing as a sibling directory
-      #    Package.swift expects: ../core-service-layers-testing/...
-      #    so both repos must sit under the same parent ($GITHUB_WORKSPACE).
+      # 2. Clone core-service-layers-testing as a sibling directory.
+      #    The mini-SDK below is test-only and is not a production dependency.
       # -----------------------------------------------------------------------
       - name: Checkout core-service-layers-testing
         uses: actions/checkout@v5
@@ -55,10 +55,9 @@ jobs:
       # -----------------------------------------------------------------------
       # 3. Verify worker endpoints (with auto-redeploy)
       #
-      #    URLs are resolved with the following precedence (mirrors the mini-sdk
-      #    fallback logic in MiniAttesterConfig / Approov.m):
+      #    URLs are resolved with the following precedence:
       #      1. GitHub org variable  (TESTING_REPLY_URL / _UNPROTECTED)
-      #      2. Mini-SDK hardcoded defaults (replay.ivol.workers.dev / ...)
+      #      2. Built-in test worker defaults (replay.ivol.workers.dev / ...)
       #
       #    If the workers are unavailable, this step invokes the management
       #    script in core-service-layers-testing to redeploy them.
@@ -68,7 +67,7 @@ jobs:
           # ── URL resolution ──────────────────────────────────────────────────
           PROTECTED_URL="${TESTING_REPLY_URL:-https://replay.ivol.workers.dev}"
           UNPROTECTED_URL="${TESTING_REPLY_URL_UNPROTECTED:-https://replay-unprotected.ivol.workers.dev}"
-          
+
           echo "TESTING_REPLY_URL=$PROTECTED_URL"       >> "$GITHUB_ENV"
           echo "TESTING_REPLY_URL_UNPROTECTED=$UNPROTECTED_URL" >> "$GITHUB_ENV"
 
@@ -88,7 +87,7 @@ jobs:
           fi
 
           echo "    WARNING: One or more workers are down. Attempting redeploy..."
-          
+
           # ── Invoke redeploy script ──────────────────────────────────────────
           # The script is in the sibling directory cloned in Step 2.
           # It uses the CLOUDFLARE_* env variables defined at the job level.
@@ -109,12 +108,10 @@ jobs:
           exit 1
 
       # -----------------------------------------------------------------------
-      # 4. Build and run tests
-      #    Swift is invoked from inside the checked-out service directory.
-      #    The mini-sdk is already available via the sibling path wired into
-      #    Package.swift — no extra configuration needed here.
+      # 4. Build and run Objective-C XCTest contract tests through SwiftPM.
+      #    APPROOV_USE_MINI_SDK=1 activates the test-only local SDK fixture.
       # -----------------------------------------------------------------------
-      - name: Build and Test (SwiftPM)
+      - name: Build and Test (SwiftPM Objective-C XCTest)
         working-directory: approov-service-nsurlsession
         env:
           TESTING_REPLY_URL: ${{ env.TESTING_REPLY_URL }}
@@ -125,7 +122,7 @@ jobs:
 
       # -----------------------------------------------------------------------
       # 5. Print test summary
-      #    Parses the Swift test output captured in the previous step.
+      #    Parses the XCTest output captured in the previous step.
       # -----------------------------------------------------------------------
       - name: Print test summary
         if: always()
@@ -146,10 +143,10 @@ jobs:
           with open(output_path, "r") as f:
               lines = f.readlines()
 
-          # Regex for Swift/XCTest output:
+          # Regex for XCTest output:
           # Test Case '-[Suite.TestClass testName]' passed (0.123 seconds).
           test_re = re.compile(r"Test Case '-\[(?P<suite>[^. ]+)\.(?P<class>[^ ]+) (?P<name>[^\]]+)\]' (?P<status>passed|failed) \((?P<time>[0-9.]+) seconds\)")
-          
+
           results = []
           for line in lines:
               match = test_re.search(line)
@@ -175,7 +172,7 @@ jobs:
           icon = PASS if overall_ok else FAIL
           print()
           print(f"{'='*70}")
-          print(f"  {icon}  Swift Test Summary  |  {passed}/{total} passed  |  {failed} failed")
+          print(f"  {icon}  XCTest Summary  |  {passed}/{total} passed  |  {failed} failed")
           print(f"{'='*70}")
           for r in results:
               print(f"  {PASS if r['status'] == 'passed' else FAIL}  {r['name']:<55} ({r['time']:.3f}s)")
@@ -186,7 +183,7 @@ jobs:
           if summary_path:
               with open(summary_path, "a") as md:
                   badge = "\U0001f7e2 PASSED" if overall_ok else "\U0001f534 FAILED"
-                  md.write(f"### Swift Tests &nbsp; {badge}\n\n")
+                  md.write(f"### XCTest Contract Tests &nbsp; {badge}\n\n")
                   md.write(f"> **{passed} passed** &nbsp;|&nbsp; **{failed} failed** &nbsp;|&nbsp; **{total} total**\n\n")
                   md.write("| Status | Test Case | Time |\n")
                   md.write("|--------|-----------|-----:|\n")

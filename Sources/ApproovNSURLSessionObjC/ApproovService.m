@@ -30,22 +30,35 @@
 #endif
 #import <stdarg.h>
 
+static id<ApproovServiceMutatorBridgeProtocol> mutatorBridgeInstance = nil;
+static dispatch_once_t mutatorBridgeOnceToken;
+
+#ifdef APPROOV_TESTING
+static BOOL mutatorBridgeOverrideActive = NO;
+static id<ApproovServiceMutatorBridgeProtocol> mutatorBridgeOverride = nil;
+#endif
+
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @implementation ApproovService
 
 + (id<ApproovServiceMutatorBridgeProtocol> _Nullable)mutatorBridge {
-    static id<ApproovServiceMutatorBridgeProtocol> bridge = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+#ifdef APPROOV_TESTING
+    @synchronized(self) {
+        if (mutatorBridgeOverrideActive) {
+            return mutatorBridgeOverride;
+        }
+    }
+#endif
+    dispatch_once(&mutatorBridgeOnceToken, ^{
         Class bridgeClass = NSClassFromString(@"ApproovServiceMutatorBridge");
         if (bridgeClass) {
             #pragma clang diagnostic push
             #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-            bridge = [bridgeClass performSelector:NSSelectorFromString(@"shared")];
+            mutatorBridgeInstance = [bridgeClass performSelector:NSSelectorFromString(@"shared")];
             #pragma clang diagnostic pop
         }
     });
-    return bridge;
+    return mutatorBridgeInstance;
 }
 
 // tag for logging
@@ -106,6 +119,11 @@ static ApproovSessionTaskObserver *sessionTaskObserver;
 
 // has NSURLSessionTask resume already been swizzled
 static BOOL isSessionTaskSwizzled = NO;
+
+#ifdef APPROOV_TESTING
+// number of times NSURLSessionTask resume has actually been swizzled
+static NSUInteger sessionTaskSwizzleCount = 0;
+#endif
 
 /**
  * Create an error resulting from using the Approov SDK.
@@ -243,11 +261,15 @@ static BOOL isSessionTaskSwizzled = NO;
         RSSWReturnType(void),
         RSSWArguments(),
         RSSWReplacement({
-            if ([sessionTaskObserver shouldExecuteTaskResume:(NSURLSessionTask *)self])
+            if ((sessionTaskObserver == nil) ||
+                [sessionTaskObserver shouldExecuteTaskResume:(NSURLSessionTask *)self])
                 RSSWCallOriginal();
         }),
     0, NULL);
     isSessionTaskSwizzled = YES;
+#ifdef APPROOV_TESTING
+    sessionTaskSwizzleCount += 1;
+#endif
 }
 
 /**
@@ -350,6 +372,49 @@ static BOOL isSessionTaskSwizzled = NO;
     }
 }
 
+#ifdef APPROOV_TESTING
++ (void)resetForTesting {
+    @synchronized(initializerLock) {
+        isInitialized = NO;
+        isApproovEnabled = NO;
+        sessionTaskObserver = nil;
+        approovTokenHeader = @"Approov-Token";
+        approovTokenPrefix = @"";
+        approovTraceIDHeader = @"Approov-TraceID";
+        bindingHeader = @"";
+        useApproovStatusIfNoToken = NO;
+        messageSigningMode = ApproovMessageSigningModeDisabled;
+        messageSigningBodyDigestEnabled = YES;
+        messageSigningBodyDigestRequired = NO;
+        substitutionHeaders = [[NSMutableDictionary alloc] init];
+        exclusionURLRegexs = [[NSMutableSet alloc] init];
+        substitutionQueryParams = [[NSMutableSet alloc] init];
+    }
+}
+
++ (void)setMutatorBridgeOverrideForTesting:(id<ApproovServiceMutatorBridgeProtocol> _Nullable)bridge {
+    @synchronized(self) {
+        mutatorBridgeOverride = bridge;
+        mutatorBridgeOverrideActive = YES;
+    }
+}
+
++ (void)clearMutatorBridgeOverrideForTesting {
+    @synchronized(self) {
+        mutatorBridgeOverride = nil;
+        mutatorBridgeOverrideActive = NO;
+    }
+}
+
++ (NSUInteger)sessionTaskSwizzleCountForTesting {
+    return sessionTaskSwizzleCount;
+}
+
++ (BOOL)isSessionTaskSwizzledForTesting {
+    return isSessionTaskSwizzled;
+}
+#endif
+
 /**
  * Deprecated. Use the Swift ApproovServiceMutator API to override network failure behavior.
  * This method is retained for source compatibility only and has no effect.
@@ -443,7 +508,7 @@ static BOOL isSessionTaskSwizzled = NO;
 + (void)setApproovTokenPrefix:(NSString *)prefix {
     @synchronized(initializerLock) {
         ApproovLogDebug(@"%@: setApproovTokenPrefix %@", TAG, prefix);
-        approovTokenPrefix = prefix;
+        approovTokenPrefix = prefix ?: @"";
     }
 }
 
@@ -1048,25 +1113,43 @@ static BOOL isSessionTaskSwizzled = NO;
     }
 }
 
-+ (void)applyMessageSigningIfEnabledToRequest:(NSMutableURLRequest *)request
++ (BOOL)applyMessageSigningIfEnabledToRequest:(NSMutableURLRequest *)request
                            substitutedHeaders:(NSArray<NSString *> *)substitutedHeaders
                                   originalURL:(NSString *)originalURL
-                     substitutedQueryParams:(NSArray<NSString *> *)substitutedQueryParams {
+                        substitutedQueryParams:(NSArray<NSString *> *)substitutedQueryParams
+                                         error:(NSError **)error {
     ApproovMessageSigningMode mode = [ApproovService getMessageSigningMode];
     if (mode == ApproovMessageSigningModeDisabled) {
-        return;
+        return YES;
     }
     BOOL useAccountSigning = (mode == ApproovMessageSigningModeAccount);
     id<ApproovServiceMutatorBridgeProtocol> bridge = [ApproovService mutatorBridge];
+    if (bridge == nil) {
+        if (error != nil) {
+            *error = [ApproovService createErrorWithType:@"general"
+                         message:@"ApproovServiceMutatorBridge class not found while processing message signing."];
+        }
+        return NO;
+    }
     [bridge setUseAccountSigning:useAccountSigning];
     [bridge setBodyDigestEnabled:[ApproovService getMessageSigningBodyDigestEnabled]];
     [bridge setBodyDigestRequired:[ApproovService getMessageSigningBodyDigestRequired]];
-    [bridge processRequest:request
-               tokenHeader:[ApproovService getApproovTokenHeader]
-             traceIDHeader:[ApproovService getApproovTraceIDHeader]
-       substitutionHeaders:substitutedHeaders
-               originalURL:originalURL
-   substitutionQueryParams:substitutedQueryParams];
+    NSError *signingError = nil;
+    NSInteger processed = [bridge processRequest:request
+                                     tokenHeader:[ApproovService getApproovTokenHeader]
+                                   traceIDHeader:[ApproovService getApproovTraceIDHeader]
+                             substitutionHeaders:substitutedHeaders
+                                     originalURL:originalURL
+                         substitutionQueryParams:substitutedQueryParams
+                                    errorPointer:&signingError];
+    if (processed == 0) {
+        if (error != nil) {
+            *error = signingError ?: [ApproovService createErrorWithType:@"general"
+                                            message:@"Approov message signing failed."];
+        }
+        return NO;
+    }
+    return YES;
 }
 
 /**
@@ -1360,10 +1443,17 @@ static BOOL isSessionTaskSwizzled = NO;
             }
         }
     }
-    [ApproovService applyMessageSigningIfEnabledToRequest:updatedRequest
-                                       substitutedHeaders:substitutedHeaderKeys
-                                              originalURL:originalURL
-                                 substitutedQueryParams:substitutedQueryParamKeys];
+    NSError *signingError = nil;
+    if (![ApproovService applyMessageSigningIfEnabledToRequest:updatedRequest
+                                            substitutedHeaders:substitutedHeaderKeys
+                                                   originalURL:originalURL
+                                      substitutedQueryParams:substitutedQueryParamKeys
+                                                        error:&signingError]) {
+        if (error != nil) {
+            *error = signingError;
+        }
+        return request;
+    }
     return updatedRequest;
 }
 

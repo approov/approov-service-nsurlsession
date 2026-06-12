@@ -34,6 +34,8 @@
 - Fixed `initialize:comment:error:` to correctly capture and log the platform SDK boolean return (`NO` = already initialized with same config, treated as success).
 - Fixed `setProceedOnNetworkFailure:` behavior: network failures are now always fail-closed. Callers relying on the old allow-through behavior must migrate to a custom `ApproovServiceMutator`.
 - Fixed message signing: signing is now skipped for non-success token fetch paths. Signing requires token artifacts (the public key for install signing; the `mksid` for account signing) that are only available on a successful token fetch. A backend receiving a request with no Approov token has no key material to verify any signature.
+- Fixed message-signing error propagation so required body digest failures and other non-SDK signing construction errors fail the request instead of silently forwarding it unsigned.
+- Fixed `setApproovTokenPrefix:` so passing `nil` is normalized to an empty prefix rather than producing a `(null)` token header prefix.
 - Fixed service-layer behavior so allowed failure/status responses can be surfaced consistently when token generation does not return a normal Approov token.
 - Fixed logging behavior so NSURLSession exposes the same practical log level controls as the URLSession service layer.
 - Fixed Swift support packaging after removing the legacy `ApproovURLSession` folder.

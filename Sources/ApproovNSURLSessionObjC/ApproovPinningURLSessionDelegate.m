@@ -119,7 +119,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
         // handle any server trust requests - we don't allow these to be further delegated
-        NSError* error;
+        NSError *error = nil;
         SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
         if (error != nil) {
             [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pinning check error: %@", TAG, error.localizedDescription];
@@ -149,16 +149,24 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
               task:(NSURLSessionTask *)task
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
-    if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]) {
-        [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
-    } else if (completionHandler != nil) {
-        SecTrustRef serverTrust = challenge.protectionSpace.serverTrust;
-        if (serverTrust != nil &&
-            [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
-            completionHandler(NSURLSessionAuthChallengeUseCredential, [[NSURLCredential alloc]initWithTrust:serverTrust]);
+    if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
+        // handle any server trust requests - we don't allow these to be further delegated
+        NSError *error = nil;
+        SecTrustRef serverTrust = [self shouldAcceptAuthenticationChallenge:challenge error:&error];
+        if (error != nil) {
+            [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pinning check error: %@", TAG, error.localizedDescription];
+            completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
+        } else if (serverTrust == nil) {
+            [ApproovService logWithLevel:ApproovLogLevelError format:@"%@: pins rejected", TAG];
+            completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
         } else {
+            [ApproovService logWithLevel:ApproovLogLevelDebug format:@"%@: pins accepted", TAG];
             completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
         }
+    } else if ([self.optionalURLDelegate respondsToSelector:@selector(URLSession:task:didReceiveChallenge:completionHandler:)]) {
+        [self.optionalURLDelegate URLSession:session task:task didReceiveChallenge:challenge completionHandler:completionHandler];
+    } else if (completionHandler != nil) {
+        completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
     }
 }
 
