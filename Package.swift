@@ -44,6 +44,20 @@ var packageTargets: [Target] = [
         exclude: ["util/sig/LICENSE"]
     )
 ]
+if useMiniSDK {
+    packageTargets.append(
+        .testTarget(
+            name: "ApproovNSURLSessionMiniSDKTests",
+            dependencies: [
+                "ApproovNSURLSession",
+                "ApproovNSURLSessionObjC",
+                .product(name: "Approov", package: "mini-sdk-ios"),
+                .product(name: "MiniSDKTestSupport", package: "mini-sdk-ios")
+            ],
+            path: "Tests/ApproovNSURLSessionMiniSDKTests"
+        )
+    )
+}
 
 let package = Package(
     name: "ApproovNSURLSession",
