@@ -15,7 +15,11 @@
 // THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
+#if __has_include(<Approov/Approov.h>)
 #import <Approov/Approov.h>
+#else
+#import <Approov.h>
+#endif
 #import "ApproovService.h"
 #import "ApproovSessionTaskObserver.h"
 #import "RSSwizzle.h"

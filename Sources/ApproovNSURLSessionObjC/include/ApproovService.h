@@ -58,17 +58,19 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
 - (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 @end
 
+NS_ASSUME_NONNULL_BEGIN
+
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
-+ (void)initialize:(NSString * _Nonnull)configString error:(NSError **)error;
-+ (void)initialize:(NSString * _Nonnull)configString comment:(NSString *)comment error:(NSError **)error;
++ (void)initialize:(NSString *)configString error:(NSError * _Nullable * _Nullable)error;
++ (void)initialize:(NSString *)configString comment:(nullable NSString *)comment error:(NSError * _Nullable * _Nullable)error;
 + (BOOL)isInitialized;
 + (BOOL)isApproovEnabled;
 + (void)setLoggingLevel:(ApproovLogLevel)level;
 + (ApproovLogLevel)getLoggingLevel;
 + (BOOL)shouldLogAtLevel:(ApproovLogLevel)level NS_SWIFT_NAME(shouldLog(at:));
-+ (void)logWithLevel:(ApproovLogLevel)level format:(NSString *)format, ... NS_FORMAT_FUNCTION(2, 3);
++ (void)logWithLevel:(ApproovLogLevel)level format:(NSString *)format, ... NS_FORMAT_FUNCTION(2, 3) NS_SWIFT_UNAVAILABLE("");
 + (void)setProceedOnNetworkFailure:(BOOL)proceed;
 + (void)setDevKey:(NSString *)devKey;
 + (void)setBindingHeader:(NSString *)newHeader;
@@ -79,14 +81,14 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
 + (NSString *)getApproovTokenPrefix;
 + (void)setApproovTraceIDHeader:(NSString *)newHeader;
 + (NSString *)getApproovTraceIDHeader;
-+ (void)addSubstitutionHeader:(NSString *)header requiredPrefix:(NSString *)prefix;
++ (void)addSubstitutionHeader:(NSString *)header requiredPrefix:(nullable NSString *)prefix;
 + (void)removeSubstitutionHeader:(NSString *)header;
 + (void)addSubstitutionQueryParam:(NSString *)key;
 + (void)removeSubstitutionQueryParam:(NSString *)key;
 + (void)addExclusionURLRegex:(NSString *)urlRegex;
 + (void)removeExclusionURLRegex:(NSString *)urlRegex;
 + (void)prefetch;
-+ (void)precheck:(NSError **)error;
++ (void)precheck:(NSError * _Nullable * _Nullable)error;
 + (NSString *)getDeviceID;
 + (void)setDataHashInToken:(NSString *)data;
 + (void)setMessageSigningMode:(ApproovMessageSigningMode)mode;
@@ -96,22 +98,24 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
 + (void)setMessageSigningBodyDigestRequired:(BOOL)required;
 + (BOOL)getMessageSigningBodyDigestRequired;
 + (void)setUseApproovStatusIfNoToken:(BOOL)shouldUse;
-+ (NSString *)getMessageSignature:(NSString *)message __attribute__((deprecated("Use getAccountMessageSignature or getInstallMessageSignature instead")));
-+ (NSString *)getAccountMessageSignature:(NSString *)message;
-+ (NSString *)getInstallMessageSignature:(NSString *)message;
-+ (NSString *)fetchToken:(NSString *)url error:(NSError **)error;
-+ (NSString *)fetchSecureString:(NSString *)key newDef:(NSString *)newDef error:(NSError **)error;
-+ (NSString *)fetchCustomJWT:(NSString*)payload error:(NSError **)error;
++ (nullable NSString *)getMessageSignature:(NSString *)message __attribute__((deprecated("Use getAccountMessageSignature or getInstallMessageSignature instead")));
++ (nullable NSString *)getAccountMessageSignature:(NSString *)message;
++ (nullable NSString *)getInstallMessageSignature:(NSString *)message;
++ (nullable NSString *)fetchToken:(NSString *)url error:(NSError * _Nullable * _Nullable)error;
++ (nullable NSString *)fetchSecureString:(NSString *)key newDef:(nullable NSString *)newDef error:(NSError * _Nullable * _Nullable)error;
++ (nullable NSString *)fetchCustomJWT:(NSString *)payload error:(NSError * _Nullable * _Nullable)error;
 + (NSDictionary *)getPins:(NSString *)pinType;
 + (NSString *)getLastARC;
 + (void)setInstallAttrsInToken:(NSString *)attrs;
-+ (void)interceptSessionTask:(NSURLSessionTask *)task sessionConfig:(NSURLSessionConfiguration *)sessionConfig
-        completionHandler:(CompletionHandlerType)completionHandler;
-+ (NSURLRequest *)updateRequestWithApproov:(NSURLRequest *)request
-        sessionConfig:(NSURLSessionConfiguration *)sessionConfig error:(NSError **)error;
++ (void)interceptSessionTask:(NSURLSessionTask *)task sessionConfig:(nullable NSURLSessionConfiguration *)sessionConfig
+        completionHandler:(nullable CompletionHandlerType)completionHandler;
++ (nullable NSURLRequest *)updateRequestWithApproov:(NSURLRequest *)request
+        sessionConfig:(nullable NSURLSessionConfiguration *)sessionConfig error:(NSError * _Nullable * _Nullable)error;
 + (BOOL)sharedUseApproovStatusIfNoToken;
 + (NSMutableSet<NSString *> *)sharedExclusionURLRegexs;
 + (id<ApproovServiceMutatorBridgeProtocol> _Nullable)mutatorBridge;
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif

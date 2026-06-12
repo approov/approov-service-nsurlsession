@@ -53,8 +53,8 @@ NS_ASSUME_NONNULL_BEGIN
  * @param sessionConfig is the session configuration being used
  * @param completionHandler is the completion handler to be called if the task is cancelled, or nil if not required
  */
- - (void)addWithTask:(NSURLSessionTask *)sessionTask sessionConfig:(NSURLSessionConfiguration *)sessionConfig
-        completionHandler:(CompletionHandlerType)completionHandler;
+ - (void)addWithTask:(NSURLSessionTask *)sessionTask sessionConfig:(nullable NSURLSessionConfiguration *)sessionConfig
+        completionHandler:(nullable CompletionHandlerType)completionHandler;
 
  /**
   * Should be called if a resume is being attempted on the session task and determines if it should be executed or not. The first time an Approov
