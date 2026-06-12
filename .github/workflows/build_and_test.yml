@@ -146,8 +146,9 @@ jobs:
               lines = f.readlines()
 
           # Regex for XCTest output:
+          # Test Case '-[TestClass testName]' passed (0.123 seconds).
           # Test Case '-[Suite.TestClass testName]' passed (0.123 seconds).
-          test_re = re.compile(r"Test Case '-\[(?P<suite>[^. ]+)\.(?P<class>[^ ]+) (?P<name>[^\]]+)\]' (?P<status>passed|failed) \((?P<time>[0-9.]+) seconds\)")
+          test_re = re.compile(r"^Test Case '-\[(?:(?P<suite>[^. ]+)\.)?(?P<class>[^ ]+) (?P<name>[^\]]+)\]' (?P<status>passed|failed) \((?P<time>[0-9.]+) seconds\)")
 
           results = []
           for line in lines:
