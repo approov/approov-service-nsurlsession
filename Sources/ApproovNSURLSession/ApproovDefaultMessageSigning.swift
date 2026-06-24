@@ -160,7 +160,11 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                     guard let base64Signature = ApproovService.getInstallMessageSignature(message),
                           let decodedSignature = Data(base64Encoded: base64Signature) else {
                         os_log("ApproovService: install message signature unavailable, skipping signing", type: .error)
-                        return request
+                        var unsignedRequest = provider.getRequest()
+                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature")
+                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Input")
+                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Base-Digest")
+                        return unsignedRequest
                     }
                     // The backend verifier expects the raw IEEE-P1363 r||s form.
                     // A malformed signature throws and fails open via the catch below.
