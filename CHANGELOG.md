@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.5.5] - 2026-06-24
+
+### Fixed
+
+- Message signing now conforms to the fail-open policy (approov/core-project-approov#564). Every signature-build failure — building the signature base, retrieving or decoding the install/account signature, decoding the ES256 ASN.1/DER signature, or serializing the signature headers — now logs at error and proceeds **unsigned** instead of aborting the request, since the backend is the enforcement point. Only a **required body digest** that cannot be generated and an **unsupported algorithm** still fail closed.
+- `setUserProperty` reported the bare `"approov-service-nsurlsession"` lock object instead of a versioned telemetry string; it now reports `approov-service-nsurlsession/<version>` (stamped from the release tag), so the active service-layer version is visible in server logs.
+- `updateRequestWithApproov:...error:` wrote through the `error` out-parameter without a nil check in the header/query secure-string substitution paths; a caller passing `NULL` (permitted by the `_Nullable` annotation) would crash on a rejection or network failure. All such writes are now guarded.
+
+### Changed
+
+- Release versioning now uses `dev` placeholders on `main` (Package.swift `releaseTAG`, the podspec `s.version`, and the `setUserProperty` string). A manual `workflow_dispatch` release job stamps the CHANGELOG version into all three and tags that commit; `main` keeps the placeholders so branches inherit them.
+
+### CI
+
+- Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
+
+### Documentation
+
+- GitHub-style README: added status badges and an `initialize` failure-handling example (correlation/session id + `getDeviceID` logging on success, unprotected fallback on failure) and a note that initialization must succeed before any protected request. Documented the same on the `initialize` method.
+
+
 ## [3.5.4] - 2026-05-28
 
 ### Added

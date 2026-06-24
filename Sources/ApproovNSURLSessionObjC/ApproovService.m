@@ -86,6 +86,10 @@ static NSMutableDictionary<NSString *, NSString *> *substitutionHeaders = nil;
 // lock object used during initialization
 static NSString *initializerLock = @"approov-service-nsurlsession";
 
+// version telemetry reported to the Approov SDK via setUserProperty. The "dev" placeholder is
+// stamped to the release version at tag time by the CI release job; main keeps "dev".
+static NSString *const versionUserProperty = @"approov-service-nsurlsession/dev";
+
 // has the ApproovService been initialized already
 static BOOL isInitialized = NO;
 
@@ -347,7 +351,7 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             if (!sdkInitialized) {
                 ApproovLogDebug(@"%@: Approov SDK already initialized", TAG);
             }
-            [Approov setUserProperty:(NSString *)initializerLock];
+            [Approov setUserProperty:versionUserProperty];
             sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
             [ApproovService swizzleSessionTask];
         } else {
@@ -1360,8 +1364,9 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Header substitution rejection: %@ %@",
                     result.ARC, result.rejectionReasons];
-                *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
-                    rejectionReasons:result.rejectionReasons];
+                if (error != nil)
+                    *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
+                        rejectionReasons:result.rejectionReasons];
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1370,13 +1375,15 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"network" message:details];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Header substitution error: %@",
                         [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"general" message:details];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"general" message:details];
                 return request;
             }
         }
@@ -1398,7 +1405,8 @@ static NSUInteger sessionTaskSwizzleCount = 0;
         if (regexError) {
             NSString *details = [NSString stringWithFormat: @"Approov query parameter substitution regex error: %@",
                 [regexError localizedDescription]];
-            *error = [ApproovService createErrorWithType:@"general" message:details];
+            if (error != nil)
+                *error = [ApproovService createErrorWithType:@"general" message:details];
             return request;
         }
         NSTextCheckingResult *match = [regex firstMatchInString:url options:0 range:NSMakeRange(0, [url length])];
@@ -1422,8 +1430,9 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution rejection %@ %@",
                     result.ARC, result.rejectionReasons];
-                *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
-                    rejectionReasons:result.rejectionReasons];
+                if (error != nil)
+                    *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
+                        rejectionReasons:result.rejectionReasons];
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1432,13 +1441,15 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"network" message:details];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"general" message:details];
+                if (error != nil)
+                    *error = [ApproovService createErrorWithType:@"general" message:details];
                 return request;
             }
         }

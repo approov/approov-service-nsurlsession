@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
     s.name         = "approov-service-nsurlsession"
     s.module_name  = "approov_service_nsurlsession"
-    s.version      = "3.5.4"
+    s.version      = "dev"
     s.summary      = "Approov mobile attestation SDK"
     s.description  = <<-DESC
       Approov SDK integrates security attestation and secure string fetching for both iOS and watchOS apps.

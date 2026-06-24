@@ -1,5 +1,11 @@
 # Approov Service for NSURLSession
 
+![Swift Package Manager](https://img.shields.io/badge/SwiftPM-compatible-FA7343?logo=swift&logoColor=white)
+![CocoaPods](https://img.shields.io/cocoapods/v/approov-service-nsurlsession?logo=cocoapods&logoColor=white&label=CocoaPods)
+![Platform](https://img.shields.io/badge/platform-iOS%2012%2B-lightgrey?logo=apple&logoColor=white)
+![Message Signing](https://img.shields.io/badge/Message%20Signing-RFC%209421-1f6feb)
+![Build](https://github.com/approov/approov-service-nsurlsession/actions/workflows/build_and_test.yml/badge.svg)
+
 A wrapper for the [Approov SDK](https://github.com/approov/approov-ios-sdk) to enable easy integration when using [`NSURLSession`](https://developer.apple.com/documentation/foundation/nsurlsession) for making the API calls that you wish to protect with Approov. If this is not your situation then check if there is a more relevant [quickstart guide](https://approov.io/docs/latest/approov-integration-examples/backend-api/) available.
 
 This page provides all the steps for integrating Approov into your app. Additionally, a step-by-step tutorial guide using our [Shapes App Example](https://github.com/approov/quickstart-ios-objectivec-nsurlsession/blob/master/SHAPES-EXAMPLE.md) is also available.
@@ -48,20 +54,30 @@ This package is an open source wrapper layer that allows you to easily use Appro
 
 The `ApproovNSURLSession` class mimics the interface of the `NSURLSession` class provided by Apple but includes Approov protection. The simplest way to use `ApproovNSURLSession` is to find and replace all the `NSURLSession` with `ApproovNSURLSession`.
 
-Additionally, `ApproovService` needs to be initialized before any network request is made using `ApproovNSURLSession`. The initialization requires a configuration string parameter, which is a custom string that configures your Approov account access. This will have been provided in your Approov onboarding email (it will be something like `#123456#K/XPlLtfcwnWkzv99Wj5VmAxo4CrU267J1KlQyoz8Qo=`).
+Additionally, `ApproovService` must be initialized **before any network request** is made using `ApproovNSURLSession` — initialize it once at app startup. The initialization requires a configuration string parameter, which is a custom string that configures your Approov account access. This will have been provided in your Approov onboarding email (it will be something like `#123456#K/XPlLtfcwnWkzv99Wj5VmAxo4CrU267J1KlQyoz8Qo=`).
+
+Check the `error` out-parameter: on success, confirm the layer is enabled and log the Approov device ID together with an app-generated session/correlation id so a given install can be correlated across your app logs, backend, and the Approov metrics. On failure, log it and continue **unprotected** so the app still functions — those requests then go out without Approov protection (the backend remains the enforcement point).
 
 ```ObjectiveC
 #import "ApproovNSURLSession.h"
 
+// App-generated id to correlate this install/session across your own logs and
+// backend. Use a UUID, or any session/user identifier you have — NOT an Approov secret.
+NSString *correlationId = [[NSUUID UUID] UUIDString];
+
 NSError *error = nil;
 [ApproovService initialize:@"<enter-your-config-string-here>" error:&error];
 if (error != nil) {
-    NSLog(@"Approov initialization failed: %@", error.localizedDescription);
-    // Handle initialization failure before making protected API calls.
+    // Initialization failed — log and continue UNPROTECTED so the app still works.
+    NSLog(@"Approov init failed (session=%@); continuing unprotected: %@", correlationId, error.localizedDescription);
+} else if ([ApproovService isApproovEnabled]) {
+    NSLog(@"Approov initialized; deviceID=%@ session=%@", [ApproovService getDeviceID], correlationId);
 }
 
 NSURLSession *defaultSession = [ApproovNSURLSession sessionWithConfiguration:NSURLSessionConfiguration.defaultSessionConfiguration];
 ```
+
+> Swift callers use `try ApproovService.initialize("<config>")` inside a `do/catch`; on success log `ApproovService.getDeviceID()` with your correlation id, on failure log and continue unprotected. See the [Hybrid App Module Conflict Warning](#hybrid-app-module-conflict-warning-spm) below for the correct module-qualified call in mixed Swift/ObjC apps.
 
 For API domains that are configured to be protected with an Approov token, this adds the `Approov-Token` header and pins the connection. This may also substitute header values when using secrets protection.
 
