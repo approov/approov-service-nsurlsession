@@ -179,7 +179,11 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 guard let sigHeader = try SFV.serializeDictionary(key: sigId, data: signature),
                       let sigInputHeader = try SFV.serializeDictionary(key: sigId, innerList: params.toComponentValue()) else {
                     os_log("ApproovService: failed to serialize signature headers, skipping signing", type: .error)
-                    return request
+                    var unsignedRequest = provider.getRequest()
+                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature")
+                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Input")
+                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Base-Digest")
+                    return unsignedRequest
                 }
 
                 // Debugging - log the message and signature-related headers
