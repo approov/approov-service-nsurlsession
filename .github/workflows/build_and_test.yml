@@ -272,7 +272,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: build-and-test
+    needs: [build-and-test, verify-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
