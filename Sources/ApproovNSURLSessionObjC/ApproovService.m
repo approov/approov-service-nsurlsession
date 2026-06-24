@@ -417,6 +417,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
 + (BOOL)isSessionTaskSwizzledForTesting {
     return isSessionTaskSwizzled;
 }
+
++ (void)setRequiredSignatureComponentForTesting:(NSString *)component {
+    [[ApproovService mutatorBridge] setRequiredSignatureComponentForTesting:component];
+}
+
++ (void)setMessageSigningAlgorithmOverrideForTesting:(NSString *)algorithm {
+    [[ApproovService mutatorBridge] setAlgorithmOverrideForTesting:algorithm];
+}
+
++ (void)clearMessageSigningTestOverridesForTesting {
+    [[ApproovService mutatorBridge] setRequiredSignatureComponentForTesting:nil];
+    [[ApproovService mutatorBridge] setAlgorithmOverrideForTesting:nil];
+}
 #endif
 
 /**

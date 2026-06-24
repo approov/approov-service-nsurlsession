@@ -55,7 +55,8 @@ var packageTargets: [Target] = [
             .product(name: "RawStructuredFieldValues", package: "swift-http-structured-headers")
         ],
         path: "Sources/ApproovNSURLSession",
-        exclude: ["util/sig/LICENSE"]
+        exclude: ["util/sig/LICENSE"],
+        swiftSettings: useMiniSDKForTests ? [.define("APPROOV_TESTING")] : nil
     )
 ]
 if useMiniSDKForTests {

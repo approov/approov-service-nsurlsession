@@ -12,6 +12,10 @@ import ApproovNSURLSessionObjC
     private var useAccountSigning = false
     private var bodyDigestEnabled = true
     private var bodyDigestRequired = false
+    #if APPROOV_TESTING
+    private var requiredSignatureComponentForTesting: String?
+    private var algorithmOverrideForTesting: String?
+    #endif
 
     private override init() {
         let signer = ApproovDefaultMessageSigning()
@@ -37,12 +41,44 @@ import ApproovNSURLSessionObjC
     }
 
     @objc public func resetServiceMutator() {
+        #if APPROOV_TESTING
+        requiredSignatureComponentForTesting = nil
+        algorithmOverrideForTesting = nil
+        #endif
         serviceMutator = defaultMessageSigner
         configureDefaultMessageSigner()
     }
 
+    #if APPROOV_TESTING
+    @objc public func setRequiredSignatureComponentForTesting(_ component: String?) {
+        requiredSignatureComponentForTesting = component
+        configureDefaultMessageSigner()
+    }
+
+    @objc public func setAlgorithmOverrideForTesting(_ algorithm: String?) {
+        algorithmOverrideForTesting = algorithm
+        configureDefaultMessageSigner()
+    }
+    #endif
+
     private func configureDefaultMessageSigner() {
+        #if APPROOV_TESTING
+        let baseParameters: SignatureParameters?
+        if let requiredSignatureComponentForTesting {
+            baseParameters = SignatureParameters().addComponentIdentifier(requiredSignatureComponentForTesting)
+        } else {
+            baseParameters = nil
+        }
+
+        let factory = ApproovDefaultMessageSigning.generateDefaultSignatureParametersFactory(
+            baseParametersOverride: baseParameters
+        )
+        if let algorithmOverrideForTesting {
+            _ = factory.setAlgorithmOverrideForTesting(algorithmOverrideForTesting)
+        }
+        #else
         let factory = ApproovDefaultMessageSigning.generateDefaultSignatureParametersFactory()
+        #endif
         if useAccountSigning {
             _ = factory.setUseAccountMessageSigning()
         } else {

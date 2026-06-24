@@ -14,7 +14,7 @@
 
 ### CI
 
-- Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
+- Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry is not already tagged and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
 
 ### Documentation
 

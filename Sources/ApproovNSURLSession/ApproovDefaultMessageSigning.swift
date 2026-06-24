@@ -373,6 +373,9 @@ public class SignatureParametersFactory {
     private var addApproovTokenHeader: Bool = false
     private var addApproovTraceIDHeader: Bool = false
     private var optionalHeaders: [String] = []
+    #if APPROOV_TESTING
+    private var algorithmOverrideForTesting: String?
+    #endif
 
     /**
      * Sets the base parameters for the factory.
@@ -428,6 +431,13 @@ public class SignatureParametersFactory {
         self.useAccountMessageSigning = true
         return self
     }
+
+    #if APPROOV_TESTING
+    func setAlgorithmOverrideForTesting(_ algorithm: String?) -> SignatureParametersFactory {
+        self.algorithmOverrideForTesting = algorithm
+        return self
+    }
+    #endif
 
     /**
      * Sets whether the "created" field should be added to the signature parameters.
@@ -500,7 +510,12 @@ public class SignatureParametersFactory {
         } else {
             requestParameters = SignatureParameters(base: baseParameters!) // Safe to unwrap, cannot be nil
         }
-        _ = requestParameters.setAlg(useAccountMessageSigning ? ApproovDefaultMessageSigning.ALG_HS256 : ApproovDefaultMessageSigning.ALG_ES256)
+        #if APPROOV_TESTING
+        let algorithm = algorithmOverrideForTesting ?? (useAccountMessageSigning ? ApproovDefaultMessageSigning.ALG_HS256 : ApproovDefaultMessageSigning.ALG_ES256)
+        #else
+        let algorithm = useAccountMessageSigning ? ApproovDefaultMessageSigning.ALG_HS256 : ApproovDefaultMessageSigning.ALG_ES256
+        #endif
+        _ = requestParameters.setAlg(algorithm)
 
         if addCreated || expiresLifetime > 0 {
             let currentTime = Int64(Date().timeIntervalSince1970)

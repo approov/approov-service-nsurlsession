@@ -63,6 +63,10 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
                errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 - (BOOL)shouldProcessPinningRequest:(NSURLRequest * _Nonnull)request;
 - (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+#ifdef APPROOV_TESTING
+- (void)setRequiredSignatureComponentForTesting:(NSString * _Nullable)component;
+- (void)setAlgorithmOverrideForTesting:(NSString * _Nullable)algorithm;
+#endif
 @end
 
 NS_ASSUME_NONNULL_BEGIN
@@ -142,6 +146,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)clearMutatorBridgeOverrideForTesting;
 + (NSUInteger)sessionTaskSwizzleCountForTesting;
 + (BOOL)isSessionTaskSwizzledForTesting;
++ (void)setRequiredSignatureComponentForTesting:(nullable NSString *)component;
++ (void)setMessageSigningAlgorithmOverrideForTesting:(nullable NSString *)algorithm;
++ (void)clearMessageSigningTestOverridesForTesting;
 #endif
 @end
 
