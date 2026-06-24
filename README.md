@@ -24,7 +24,7 @@ The Approov integration is available via [`CocoaPods`](https://cocoapods.org/). 
 target 'YourApplication' do
     use_frameworks!
     platform :ios, '12.0'
-    pod 'approov-service-nsurlsession', '3.5.4'
+    pod 'approov-service-nsurlsession', '3.5.5'
 end
 ```
 
@@ -42,7 +42,7 @@ Alternatively, you can add the dependency using Swift Package Manager. Add the f
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/approov/approov-service-nsurlsession.git", from: "3.5.4"),
+    .package(url: "https://github.com/approov/approov-service-nsurlsession.git", from: "3.5.5"),
 ]
 ```
 
