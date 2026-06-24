@@ -66,6 +66,9 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
 #ifdef APPROOV_TESTING
 - (void)setRequiredSignatureComponentForTesting:(NSString * _Nullable)component;
 - (void)setAlgorithmOverrideForTesting:(NSString * _Nullable)algorithm;
+- (void)setInstallMessageSignatureOverrideForTesting:(NSString * _Nullable)signature;
+- (void)setAccountMessageSignatureOverrideForTesting:(NSString * _Nullable)signature;
+- (void)clearMessageSignatureOverridesForTesting;
 #endif
 @end
 
@@ -148,6 +151,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)isSessionTaskSwizzledForTesting;
 + (void)setRequiredSignatureComponentForTesting:(nullable NSString *)component;
 + (void)setMessageSigningAlgorithmOverrideForTesting:(nullable NSString *)algorithm;
++ (void)setInstallMessageSignatureOverrideForTesting:(nullable NSString *)signature;
++ (void)setAccountMessageSignatureOverrideForTesting:(nullable NSString *)signature;
 + (void)clearMessageSigningTestOverridesForTesting;
 #endif
 @end

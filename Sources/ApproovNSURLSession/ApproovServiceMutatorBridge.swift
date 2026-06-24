@@ -44,6 +44,7 @@ import ApproovNSURLSessionObjC
         #if APPROOV_TESTING
         requiredSignatureComponentForTesting = nil
         algorithmOverrideForTesting = nil
+        defaultMessageSigner.clearMessageSignatureOverridesForTesting()
         #endif
         serviceMutator = defaultMessageSigner
         configureDefaultMessageSigner()
@@ -58,6 +59,18 @@ import ApproovNSURLSessionObjC
     @objc public func setAlgorithmOverrideForTesting(_ algorithm: String?) {
         algorithmOverrideForTesting = algorithm
         configureDefaultMessageSigner()
+    }
+
+    @objc public func setInstallMessageSignatureOverrideForTesting(_ signature: String?) {
+        defaultMessageSigner.setInstallMessageSignatureOverrideForTesting(signature)
+    }
+
+    @objc public func setAccountMessageSignatureOverrideForTesting(_ signature: String?) {
+        defaultMessageSigner.setAccountMessageSignatureOverrideForTesting(signature)
+    }
+
+    @objc public func clearMessageSignatureOverridesForTesting() {
+        defaultMessageSigner.clearMessageSignatureOverridesForTesting()
     }
     #endif
 
@@ -111,6 +124,19 @@ import ApproovNSURLSessionObjC
             return value
         }
         return nil
+    }
+
+    private func replaceHTTPHeaderFields(on request: NSMutableURLRequest,
+                                         with headers: [String: String]?) {
+        if let existingHeaders = request.allHTTPHeaderFields {
+            for key in existingHeaders.keys {
+                request.setValue(nil, forHTTPHeaderField: key)
+            }
+        }
+
+        for (key, value) in headers ?? [:] {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
     }
 
     @objc public func processRequest(_ request: NSMutableURLRequest, tokenHeader: String?) {
@@ -203,7 +229,7 @@ import ApproovNSURLSessionObjC
                 request.httpBodyStream = nil
             }
             request.timeoutInterval = processedRequest.timeoutInterval
-            request.allHTTPHeaderFields = processedRequest.allHTTPHeaderFields
+            replaceHTTPHeaderFields(on: request, with: processedRequest.allHTTPHeaderFields)
             return 1
         } catch {
             if ApproovService.shouldLog(at: .error) {

@@ -59,6 +59,13 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
      */
     private var hostFactories: [String: SignatureParametersFactory]
 
+    #if APPROOV_TESTING
+    private var installMessageSignatureOverrideActiveForTesting = false
+    private var installMessageSignatureOverrideForTesting: String?
+    private var accountMessageSignatureOverrideActiveForTesting = false
+    private var accountMessageSignatureOverrideForTesting: String?
+    #endif
+
     /**
      * Initializer
      */
@@ -106,6 +113,61 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
         let factory = hostFactories[provider.getAuthority()] ?? defaultFactory
         return try factory?.buildSignatureParameters(provider: provider, changes: changes)
     }
+
+    private static func withoutSignatureHeaders(_ request: URLRequest) -> URLRequest {
+        var unsignedRequest = request
+        removeHTTPHeaderField("Signature", from: &unsignedRequest)
+        removeHTTPHeaderField("Signature-Input", from: &unsignedRequest)
+        removeHTTPHeaderField("Signature-Base-Digest", from: &unsignedRequest)
+        return unsignedRequest
+    }
+
+    private static func removeHTTPHeaderField(_ field: String, from request: inout URLRequest) {
+        request.setValue(nil, forHTTPHeaderField: field)
+        guard let headers = request.allHTTPHeaderFields else {
+            return
+        }
+        for key in headers.keys where key.caseInsensitiveCompare(field) == .orderedSame {
+            request.setValue(nil, forHTTPHeaderField: key)
+        }
+    }
+
+    private func installMessageSignature(for message: String) -> String? {
+        #if APPROOV_TESTING
+        if installMessageSignatureOverrideActiveForTesting {
+            return installMessageSignatureOverrideForTesting
+        }
+        #endif
+        return ApproovService.getInstallMessageSignature(message)
+    }
+
+    private func accountMessageSignature(for message: String) -> String? {
+        #if APPROOV_TESTING
+        if accountMessageSignatureOverrideActiveForTesting {
+            return accountMessageSignatureOverrideForTesting
+        }
+        #endif
+        return ApproovService.getAccountMessageSignature(message)
+    }
+
+    #if APPROOV_TESTING
+    func setInstallMessageSignatureOverrideForTesting(_ signature: String?) {
+        installMessageSignatureOverrideActiveForTesting = true
+        installMessageSignatureOverrideForTesting = signature
+    }
+
+    func setAccountMessageSignatureOverrideForTesting(_ signature: String?) {
+        accountMessageSignatureOverrideActiveForTesting = true
+        accountMessageSignatureOverrideForTesting = signature
+    }
+
+    func clearMessageSignatureOverridesForTesting() {
+        installMessageSignatureOverrideActiveForTesting = false
+        installMessageSignatureOverrideForTesting = nil
+        accountMessageSignatureOverrideActiveForTesting = false
+        accountMessageSignatureOverrideForTesting = nil
+    }
+    #endif
 
     /**
      * Processes a request to add message signature headers.
@@ -157,24 +219,20 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 let signature: Data
                 if alg == ApproovDefaultMessageSigning.ALG_ES256 {
                     sigId = "install"
-                    guard let base64Signature = ApproovService.getInstallMessageSignature(message),
+                    guard let base64Signature = installMessageSignature(for: message),
                           let decodedSignature = Data(base64Encoded: base64Signature) else {
                         os_log("ApproovService: install message signature unavailable, skipping signing", type: .error)
-                        var unsignedRequest = provider.getRequest()
-                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature")
-                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Input")
-                        unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Base-Digest")
-                        return unsignedRequest
+                        return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
                     }
                     // The backend verifier expects the raw IEEE-P1363 r||s form.
                     // A malformed signature throws and fails open via the catch below.
                     signature = try ApproovDefaultMessageSigning.decodeASN_1_DER_ES256_Signature(decodedSignature)
                 } else {
                     sigId = "account"
-                    guard let base64Signature = ApproovService.getAccountMessageSignature(message),
+                    guard let base64Signature = accountMessageSignature(for: message),
                           let decodedSignature = Data(base64Encoded: base64Signature) else {
                         os_log("ApproovService: account message signature unavailable, skipping signing", type: .error)
-                        return request
+                        return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
                     }
                     signature = decodedSignature
                 }
@@ -183,11 +241,7 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 guard let sigHeader = try SFV.serializeDictionary(key: sigId, data: signature),
                       let sigInputHeader = try SFV.serializeDictionary(key: sigId, innerList: params.toComponentValue()) else {
                     os_log("ApproovService: failed to serialize signature headers, skipping signing", type: .error)
-                    var unsignedRequest = provider.getRequest()
-                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature")
-                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Input")
-                    unsignedRequest.setValue(nil, forHTTPHeaderField: "Signature-Base-Digest")
-                    return unsignedRequest
+                    return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
                 }
 
                 // Debugging - log the message and signature-related headers
@@ -205,13 +259,17 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 if params.isDebugMode() {
                     let digest = ApproovDefaultMessageSigning.sha256(data: Data(message.utf8))
                     // The optional debug digest header must not drop a valid signature on failure.
-                    if let sigBaseDigestHeader = (try? SFV.serializeDictionary(key: "sha-256", data: digest)) ?? nil {
-                        signedRequest.setValue(sigBaseDigestHeader, forHTTPHeaderField: "Signature-Base-Digest")
-                    } else {
-                        os_log("ApproovService: Failed to get digest algorithm - no debug entry", type: .debug)
+                    do {
+                        if let sigBaseDigestHeader = try SFV.serializeDictionary(key: "sha-256", data: digest) {
+                            signedRequest.setValue(sigBaseDigestHeader, forHTTPHeaderField: "Signature-Base-Digest")
+                        } else {
+                            os_log("ApproovService: failed to serialize Signature-Base-Digest debug header", type: .debug)
+                        }
+                    } catch {
+                        os_log("ApproovService: failed to serialize Signature-Base-Digest debug header: %@", type: .debug, error.localizedDescription)
                     }
                 } else {
-                    signedRequest.setValue(nil, forHTTPHeaderField: "Signature-Base-Digest")
+                    ApproovDefaultMessageSigning.removeHTTPHeaderField("Signature-Base-Digest", from: &signedRequest)
                 }
 
                 // WARNING never log the full request as it contains an Approov token which provides access to your API
@@ -221,7 +279,7 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 // Fail open: building the signature base, decoding the ES256 ASN.1/DER signature,
                 // or serializing the headers failed. Log at error and proceed unsigned.
                 os_log("ApproovService: message signing failed, proceeding unsigned: %@", type: .error, error.localizedDescription)
-                return request
+                return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
             }
         }
 

@@ -2,6 +2,7 @@
 #import <XCTest/XCTest.h>
 
 @import ApproovNSURLSessionObjC;
+@import Approov;
 @import MiniSDKTestSupport;
 
 @interface ApproovTestChallengeSender : NSObject <NSURLAuthenticationChallengeSender>
@@ -32,7 +33,7 @@
 - (void)setUp {
     [super setUp];
     [MiniSDKAttesterProxyController reset];
-    [MiniSDKAttesterProxyController clearUserProperty];
+    [Approov setUserProperty:nil];
     [ApproovService clearMutatorBridgeOverrideForTesting];
     [ApproovService resetForTesting];
     [ApproovService clearMessageSigningTestOverridesForTesting];
@@ -44,7 +45,7 @@
     [ApproovService resetForTesting];
     [ApproovService clearMessageSigningTestOverridesForTesting];
     [MiniSDKAttesterProxyController reset];
-    [MiniSDKAttesterProxyController clearUserProperty];
+    [Approov setUserProperty:nil];
     [super tearDown];
 }
 
@@ -352,33 +353,26 @@
 #pragma mark - Message Signing
 
 - (void)testAccountMessageSigningInvalidBase64FailsOpen {
-    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@"\"accountMessageSignatureMode\":\"invalid-base64\""]);
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
     [ApproovService setMessageSigningMode:ApproovMessageSigningModeAccount];
+    [ApproovService setAccountMessageSignatureOverrideForTesting:@"not-base64"];
 
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
-    NSDictionary *reply = [self fetchNetworkReplyForRequest:request];
-
-    XCTAssertNotNil(reply);
-    XCTAssertNotNil([self headerFromReply:reply key:@"Approov-Token"]);
-    XCTAssertNotNil([self headerFromReply:reply key:@"Approov-TraceID"]);
-    XCTAssertNil([self headerFromReply:reply key:@"Signature"]);
-    XCTAssertNil([self headerFromReply:reply key:@"Signature-Input"]);
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    [self assertMessageSigningFailsOpenForRequest:request failureMessage:@"invalid account signature base64"];
 }
 
 - (void)testInstallMessageSigningMalformedDERFailsOpen {
-    for (NSString *signatureMode in @[@"malformed-der", @"truncated-der"]) {
-        NSString *scenarioBody = [NSString stringWithFormat:@"\"installMessageSignatureMode\":\"%@\"", signatureMode];
-        XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:scenarioBody]);
+    NSDictionary<NSString *, NSString *> *signatureOverrides = @{
+        @"malformed-der": @"AAAA",
+        @"truncated-der": @"MA=="
+    };
+    for (NSString *signatureMode in signatureOverrides) {
+        XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
         [ApproovService setMessageSigningMode:ApproovMessageSigningModeInstall];
+        [ApproovService setInstallMessageSignatureOverrideForTesting:signatureOverrides[signatureMode]];
 
-        NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
-        NSDictionary *reply = [self fetchNetworkReplyForRequest:request];
-
-        XCTAssertNotNil(reply, @"Failed for %@", signatureMode);
-        XCTAssertNotNil([self headerFromReply:reply key:@"Approov-Token"], @"Failed for %@", signatureMode);
-        XCTAssertNotNil([self headerFromReply:reply key:@"Approov-TraceID"], @"Failed for %@", signatureMode);
-        XCTAssertNil([self headerFromReply:reply key:@"Signature"], @"Failed for %@", signatureMode);
-        XCTAssertNil([self headerFromReply:reply key:@"Signature-Input"], @"Failed for %@", signatureMode);
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+        [self assertMessageSigningFailsOpenForRequest:request failureMessage:signatureMode];
     }
 }
 
@@ -387,14 +381,8 @@
     [ApproovService setMessageSigningMode:ApproovMessageSigningModeAccount];
     [ApproovService setRequiredSignatureComponentForTesting:@"X-Required-Missing"];
 
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
-    NSDictionary *reply = [self fetchNetworkReplyForRequest:request];
-
-    XCTAssertNotNil(reply);
-    XCTAssertNotNil([self headerFromReply:reply key:@"Approov-Token"]);
-    XCTAssertNotNil([self headerFromReply:reply key:@"Approov-TraceID"]);
-    XCTAssertNil([self headerFromReply:reply key:@"Signature"]);
-    XCTAssertNil([self headerFromReply:reply key:@"Signature-Input"]);
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    [self assertMessageSigningFailsOpenForRequest:request failureMessage:@"missing required signature component"];
 }
 
 - (void)testRequiredBodyDigestFailurePropagatesFromMessageSigning {
@@ -438,19 +426,37 @@
 #pragma mark - Version Telemetry and Release Versioning
 
 - (void)testProtectedInitializationReportsVersionedUserProperty {
-    XCTAssertTrue([self initializeServiceWithComment:@"reinit-version-telemetry"]);
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
 
-    XCTAssertEqualObjects([MiniSDKAttesterProxyController userProperty], @"approov-service-nsurlsession/dev");
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSDictionary *reply = [self fetchNetworkReplyForRequest:request];
+    NSString *token = [self headerFromReply:reply key:@"Approov-Token"];
+    NSDictionary *payload = [self decodeJWTBody:token];
+
+    XCTAssertNotNil(token);
+    XCTAssertEqualObjects(payload[@"user_property"], @"approov-service-nsurlsession/dev");
 }
 
 - (void)testEmptyConfigInitializationDoesNotReportProtectedTelemetry {
+    NSURL *targetURL = [NSURL URLWithString:[self targetURLString]];
+    XCTAssertNotNil(targetURL.host);
+    NSString *scenarioJSON = [self scenarioJSONWithCaseName:[self uniqueCaseNameWithPrefix:@"empty-telemetry"]
+                                                       body:[NSString stringWithFormat:@"\"protectedDomains\":[\"%@\"]", targetURL.host]];
+    [MiniSDKAttesterProxyController loadScenarioJSON:scenarioJSON];
+    [MiniSDKAttesterProxyController initializeApproovResult:[self validInitialConfig]
+                                               updateConfig:@"auto"
+                                                    comment:@"reinit-empty-telemetry"];
+
     NSError *error = nil;
     [ApproovService initialize:@"" comment:@"empty-config-telemetry" error:&error];
+    ApproovTokenFetchResult *result = [Approov fetchApproovTokenAndWait:[self targetURLString]];
+    NSDictionary *payload = [self decodeJWTBody:result.token];
 
     XCTAssertNil(error);
     XCTAssertTrue([ApproovService isInitialized]);
     XCTAssertFalse([ApproovService isApproovEnabled]);
-    XCTAssertNil([MiniSDKAttesterProxyController userProperty]);
+    XCTAssertEqual(result.status, ApproovTokenFetchStatusSuccess);
+    XCTAssertNil(payload[@"user_property"]);
 }
 
 #pragma mark - Pinning Challenge Behavior
@@ -679,6 +685,30 @@
         [padded appendString:@"="];
     }
     return [[NSData alloc] initWithBase64EncodedString:padded options:0];
+}
+
+- (void)addStaleSignatureHeadersToRequest:(NSMutableURLRequest *)request {
+    [request setValue:@"stale-signature" forHTTPHeaderField:@"Signature"];
+    [request setValue:@"stale-signature-input" forHTTPHeaderField:@"Signature-Input"];
+    [request setValue:@"stale-signature-base-digest" forHTTPHeaderField:@"Signature-Base-Digest"];
+}
+
+- (void)assertMessageSigningFailsOpenForRequest:(NSMutableURLRequest *)request
+                                 failureMessage:(NSString *)failureMessage {
+    [self addStaleSignatureHeadersToRequest:request];
+
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error, @"%@", failureMessage);
+    XCTAssertNotNil(updatedRequest, @"%@", failureMessage);
+    XCTAssertNotNil([updatedRequest valueForHTTPHeaderField:@"Approov-Token"], @"%@", failureMessage);
+    XCTAssertNotNil([updatedRequest valueForHTTPHeaderField:@"Approov-TraceID"], @"%@", failureMessage);
+    XCTAssertNil([updatedRequest valueForHTTPHeaderField:@"Signature"], @"%@", failureMessage);
+    XCTAssertNil([updatedRequest valueForHTTPHeaderField:@"Signature-Input"], @"%@", failureMessage);
+    XCTAssertNil([updatedRequest valueForHTTPHeaderField:@"Signature-Base-Digest"], @"%@", failureMessage);
 }
 
 @end
