@@ -2,7 +2,7 @@
 
 ![Swift Package Manager](https://img.shields.io/badge/SwiftPM-compatible-FA7343?logo=swift&logoColor=white)
 ![CocoaPods](https://img.shields.io/cocoapods/v/approov-service-nsurlsession?logo=cocoapods&logoColor=white&label=CocoaPods)
-![Platform](https://img.shields.io/badge/platform-iOS%2012%2B-lightgrey?logo=apple&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-iOS%2011%2B%20%7C%20watchOS%209%2B-lightgrey?logo=apple&logoColor=white)
 ![Message Signing](https://img.shields.io/badge/Message%20Signing-RFC%209421-1f6feb)
 ![Build](https://github.com/approov/approov-service-nsurlsession/actions/workflows/build_and_test.yml/badge.svg)
 
@@ -12,7 +12,7 @@ This page provides all the steps for integrating Approov into your app. Addition
 
 To follow this guide you should have received an onboarding email for a trial or paid [Approov](https://www.approov.io) account.
 
-Note that the minimum requirement is iOS 12. You cannot use Approov in apps that support iOS versions older than this.
+Note that the minimum requirements are iOS 11 and watchOS 9. You cannot use Approov in apps that support platform versions older than these.
 
 ## Adding the Approov Service Dependency
 
@@ -23,7 +23,7 @@ The Approov integration is available via [`CocoaPods`](https://cocoapods.org/). 
 ```
 target 'YourApplication' do
     use_frameworks!
-    platform :ios, '12.0'
+    platform :ios, '11.0'
     pod 'approov-service-nsurlsession', '3.5.5'
 end
 ```
