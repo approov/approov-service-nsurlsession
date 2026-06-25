@@ -77,6 +77,19 @@ import ApproovNSURLSessionObjC
         return nil
     }
 
+    private func replaceHTTPHeaderFields(on request: NSMutableURLRequest,
+                                         with headers: [String: String]?) {
+        if let existingHeaders = request.allHTTPHeaderFields {
+            for key in existingHeaders.keys {
+                request.setValue(nil, forHTTPHeaderField: key)
+            }
+        }
+
+        for (key, value) in headers ?? [:] {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+    }
+
     @objc public func processRequest(_ request: NSMutableURLRequest, tokenHeader: String?) {
         var ignoredError: NSError?
         _ = processRequest(request,
@@ -167,7 +180,7 @@ import ApproovNSURLSessionObjC
                 request.httpBodyStream = nil
             }
             request.timeoutInterval = processedRequest.timeoutInterval
-            request.allHTTPHeaderFields = processedRequest.allHTTPHeaderFields
+            replaceHTTPHeaderFields(on: request, with: processedRequest.allHTTPHeaderFields)
             return 1
         } catch {
             if ApproovService.shouldLog(at: .error) {
