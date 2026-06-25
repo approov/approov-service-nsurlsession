@@ -257,7 +257,8 @@ jobs:
   # Manual release (workflow_dispatch ONLY — the single place that tags).
   #
   # Trigger from the Actions tab against main once main is known good. Gated on
-  # build-and-test so a release never tags failing code. It stamps the CHANGELOG
+  # build-and-test and verify-release so a release never tags failing code or
+  # missing release placeholders. It stamps the CHANGELOG
   # version in lock-step into the dev placeholders (Package.swift releaseTAG,
   # every root .podspec s.version, and the approov-service-nsurlsession/dev telemetry string),
   # commits "Release version <x.y.z>", and tags THAT commit. main keeps the dev
@@ -266,7 +267,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: build-and-test
+    needs: [build-and-test, verify-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
