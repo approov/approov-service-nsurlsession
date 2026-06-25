@@ -59,6 +59,24 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
      */
     private var hostFactories: [String: SignatureParametersFactory]
 
+#if APPROOV_TESTING
+    private static var installMessageSignatureOverrideForTesting: String??
+    private static var accountMessageSignatureOverrideForTesting: String??
+
+    public static func setInstallMessageSignatureOverrideForTesting(_ signature: String?) {
+        installMessageSignatureOverrideForTesting = .some(signature)
+    }
+
+    public static func setAccountMessageSignatureOverrideForTesting(_ signature: String?) {
+        accountMessageSignatureOverrideForTesting = .some(signature)
+    }
+
+    public static func clearMessageSignatureOverridesForTesting() {
+        installMessageSignatureOverrideForTesting = nil
+        accountMessageSignatureOverrideForTesting = nil
+    }
+#endif
+
     /**
      * Initializer
      */
@@ -125,6 +143,24 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
         }
     }
 
+    private static func installMessageSignature(for message: String) -> String? {
+#if APPROOV_TESTING
+        if let override = installMessageSignatureOverrideForTesting {
+            return override
+        }
+#endif
+        return ApproovService.getInstallMessageSignature(message)
+    }
+
+    private static func accountMessageSignature(for message: String) -> String? {
+#if APPROOV_TESTING
+        if let override = accountMessageSignatureOverrideForTesting {
+            return override
+        }
+#endif
+        return ApproovService.getAccountMessageSignature(message)
+    }
+
     /**
      * Processes a request to add message signature headers.
      *
@@ -175,7 +211,7 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                 let signature: Data
                 if alg == ApproovDefaultMessageSigning.ALG_ES256 {
                     sigId = "install"
-                    guard let base64Signature = ApproovService.getInstallMessageSignature(message),
+                    guard let base64Signature = ApproovDefaultMessageSigning.installMessageSignature(for: message),
                           let decodedSignature = Data(base64Encoded: base64Signature) else {
                         os_log("ApproovService: install message signature unavailable, skipping signing", type: .error)
                         return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
@@ -185,7 +221,7 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
                     signature = try ApproovDefaultMessageSigning.decodeASN_1_DER_ES256_Signature(decodedSignature)
                 } else {
                     sigId = "account"
-                    guard let base64Signature = ApproovService.getAccountMessageSignature(message),
+                    guard let base64Signature = ApproovDefaultMessageSigning.accountMessageSignature(for: message),
                           let decodedSignature = Data(base64Encoded: base64Signature) else {
                         os_log("ApproovService: account message signature unavailable, skipping signing", type: .error)
                         return ApproovDefaultMessageSigning.withoutSignatureHeaders(provider.getRequest())
@@ -395,6 +431,9 @@ public class SignatureParametersFactory {
     private var addApproovTokenHeader: Bool = false
     private var addApproovTraceIDHeader: Bool = false
     private var optionalHeaders: [String] = []
+#if APPROOV_TESTING
+    private var algOverrideForTesting: String?
+#endif
 
     /**
      * Sets the base parameters for the factory.
@@ -506,6 +545,13 @@ public class SignatureParametersFactory {
         return self
     }
 
+#if APPROOV_TESTING
+    public func setAlgOverrideForTesting(_ alg: String?) -> SignatureParametersFactory {
+        self.algOverrideForTesting = alg
+        return self
+    }
+#endif
+
     /**
      * Builds the signature parameters for a given request.
      *
@@ -523,6 +569,11 @@ public class SignatureParametersFactory {
             requestParameters = SignatureParameters(base: baseParameters!) // Safe to unwrap, cannot be nil
         }
         _ = requestParameters.setAlg(useAccountMessageSigning ? ApproovDefaultMessageSigning.ALG_HS256 : ApproovDefaultMessageSigning.ALG_ES256)
+#if APPROOV_TESTING
+        if let algOverrideForTesting {
+            _ = requestParameters.setAlg(algOverrideForTesting)
+        }
+#endif
 
         if addCreated || expiresLifetime > 0 {
             let currentTime = Int64(Date().timeIntervalSince1970)
