@@ -46,6 +46,14 @@
 
 #pragma mark - Initialization
 
+- (void)testInitializationReportsVersionedTelemetry {
+    XCTAssertTrue([self initializeServiceWithComment:@"reinit-telemetry"]);
+
+    NSString *userProperty = [MiniSDKAttesterProxyController userProperty];
+    XCTAssertTrue([userProperty hasPrefix:@"approov-service-nsurlsession/"],
+                  @"Expected versioned telemetry prefix, got: %@", userProperty);
+}
+
 - (void)testInitializeIgnoresSameConfig {
     XCTAssertTrue([self initializeServiceWithComment:@"reinit-nsurlsession-tests"]);
 
@@ -377,6 +385,57 @@
 
     XCTAssertEqual(disposition, NSURLSessionAuthChallengeCancelAuthenticationChallenge);
     XCTAssertNil(credential);
+}
+
+#pragma mark - Null error pointer crash regression (updateRequestWithApproov:error:)
+
+- (void)testHeaderSubstitutionRejectionWithNullErrorDoesNotCrash {
+    // Establish a protected domain so updateRequestWithApproov processes the request.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService addSubstitutionHeader:@"X-API-Key" requiredPrefix:nil];
+
+    // The directive is operation-specific: fetchApproovToken consumes the scenario (not this
+    // directive), then fetchSecureString consumes this directive and returns REJECTED.
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchSecureString\","
+          @"\"response\":{"
+            @"\"status\":\"REJECTED\","
+            @"\"ARC\":\"test-arc\","
+            @"\"rejectionReasons\":\"test-reason\""
+          @"}"
+        @"}"];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    [request setValue:@"placeholder-key" forHTTPHeaderField:@"X-API-Key"];
+
+    // Pre-fix: writing *error without a nil check crashed when error was NULL.
+    NSURLRequest *result = [ApproovService updateRequestWithApproov:request
+                                                     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                             error:NULL];
+    XCTAssertNotNil(result);
+}
+
+- (void)testQueryParamSubstitutionNetworkFailureWithNullErrorDoesNotCrash {
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService addSubstitutionQueryParam:@"api-key"];
+
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchSecureString\","
+          @"\"response\":{"
+            @"\"status\":\"NO_NETWORK\""
+          @"}"
+        @"}"];
+
+    NSString *urlWithParam = [[self targetURLString] stringByAppendingString:@"?api-key=placeholder-key"];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlWithParam]];
+
+    // Pre-fix: writing *error without a nil check crashed when error was NULL.
+    NSURLRequest *result = [ApproovService updateRequestWithApproov:request
+                                                     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                             error:NULL];
+    XCTAssertNotNil(result);
 }
 
 #pragma mark - Helpers
