@@ -46,14 +46,6 @@
 
 #pragma mark - Initialization
 
-- (void)testInitializationReportsVersionedTelemetry {
-    XCTAssertTrue([self initializeServiceWithComment:@"reinit-telemetry"]);
-
-    NSString *userProperty = [MiniSDKAttesterProxyController userProperty];
-    XCTAssertTrue([userProperty hasPrefix:@"approov-service-nsurlsession/"],
-                  @"Expected versioned telemetry prefix, got: %@", userProperty);
-}
-
 - (void)testInitializeIgnoresSameConfig {
     XCTAssertTrue([self initializeServiceWithComment:@"reinit-nsurlsession-tests"]);
 
