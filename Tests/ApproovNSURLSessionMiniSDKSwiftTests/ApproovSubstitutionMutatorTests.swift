@@ -47,6 +47,9 @@ final class ApproovSubstitutionMutatorTests: XCTestCase {
     // configuration, so a private config here passes alone and fails in a full run.
     private let sharedTestConfig = "#cb-ivol#mAxOF0ekJUOC36J5XWmVmVipOcUoEdMjhPSp2FVtyTo="
     private let placeholder = "test-secure-string-key"
+    // A second placeholder whose fetch the mini-SDK answers with REJECTED, so the mutator is consulted
+    // with a status the default policy fails the request on.
+    private let rejectedPlaceholder = "rejected-secure-string-key"
     private var calls: [String] = []
 
     override func setUp() {
@@ -60,7 +63,9 @@ final class ApproovSubstitutionMutatorTests: XCTestCase {
         XCTAssertFalse(host.isEmpty, "TESTING_REPLY_URL must carry a host")
         let caseName = "swift-mutator-" + UUID().uuidString.lowercased()
         let scenario = "{\"activeCase\":\"" + caseName + "\",\"cases\":{\"" + caseName
-            + "\":{\"protectedDomains\":[\"" + host + "\"]}}}"
+            + "\":{\"protectedDomains\":[\"" + host + "\"],"
+            + "\"fetchSecureString\":[{\"key\":\"" + rejectedPlaceholder
+            + "\",\"status\":\"REJECTED\",\"rejectionReasons\":\"MUTATOR-TEST\"}]}}}"
         MiniSDKAttesterProxyController.loadScenarioJSON(scenario)
         ApproovService.setLoggingLevel(.off)
 
@@ -119,6 +124,47 @@ final class ApproovSubstitutionMutatorTests: XCTestCase {
         XCTAssertNil(thrown, "no throw reaches Swift because a non-nil request is returned")
         XCTAssertEqual(returned?.value(forHTTPHeaderField: "Api-Key"), placeholder,
                        "the refused request must come back with its placeholder untouched")
+    }
+
+    // MARK: - Skip is honoured for every status, not only SUCCESS
+
+    // The interceptor used to treat a false return as a skip only when the status was SUCCESS; for any
+    // other status it fell through to the hardcoded branches and aborted anyway, so a custom mutator
+    // could not override a failing status even though the bridge protocol documents false as "skip".
+    // The observable difference is the returned request: an abort hands back the caller's original
+    // request, a skip hands back the processed one, which carries the Approov token.
+    func testMutatorCanSkipARejectedHeaderSubstitution() throws {
+        install(.skip)
+        let updated = try updateRequest(headerValue: rejectedPlaceholder)
+
+        XCTAssertTrue(calls.contains { $0 == "header:Api-Key:rejected" },
+                      "the mutator must be consulted with the rejected status; calls=\(calls)")
+        XCTAssertEqual(updated?.value(forHTTPHeaderField: "Api-Key"), rejectedPlaceholder,
+                       "a skipped substitution leaves the placeholder in place")
+        XCTAssertNotNil(updated?.value(forHTTPHeaderField: "Approov-Token"),
+                        "the request must proceed with Approov processing, not be aborted")
+    }
+
+    func testMutatorCanSkipARejectedQueryParamSubstitution() throws {
+        install(.skip)
+        let updated = try updateRequest(query: "api-key=" + rejectedPlaceholder)
+
+        XCTAssertTrue(calls.contains { $0 == "query:api-key:rejected" },
+                      "the mutator must be consulted with the rejected status; calls=\(calls)")
+        XCTAssertEqual(updated?.url?.query, "api-key=" + rejectedPlaceholder,
+                       "a skipped substitution leaves the query placeholder in place")
+        XCTAssertNotNil(updated?.value(forHTTPHeaderField: "Approov-Token"),
+                        "the request must proceed with Approov processing, not be aborted")
+    }
+
+    // Guards the claim that honouring skip for every status changes nothing without a custom mutator:
+    // the default mutator throws on REJECTED, so the request must still be aborted unprocessed.
+    func testDefaultMutatorStillFailsClosedOnARejectedSubstitution() throws {
+        let updated = try updateRequest(headerValue: rejectedPlaceholder)
+
+        XCTAssertEqual(updated?.value(forHTTPHeaderField: "Api-Key"), rejectedPlaceholder)
+        XCTAssertNil(updated?.value(forHTTPHeaderField: "Approov-Token"),
+                     "the default policy must abort a rejected substitution, returning the original request")
     }
 
     private func install(_ behaviour: RecordingMutator.Behaviour) {

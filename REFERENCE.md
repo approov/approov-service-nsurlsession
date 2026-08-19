@@ -15,13 +15,14 @@ NSError *error = nil;
 
 ### `+initialize:comment:error:`
 
-Initializes the service layer and optionally the native Approov SDK. The call is forwarded to the SDK first, and the service layer resets its own internal state **only after the SDK reports success** — there are no service-layer same-config or reinit guards. A failed call therefore leaves the previous state completely intact: a layer that was protecting traffic keeps protecting it, and a layer in bypass mode stays in bypass mode. Only a first-ever initialization that fails leaves the layer uninitialized. The SDK itself determines whether a repeated initialization is compatible and returns `NO` with a `nil` error when it was already initialized with the same configuration. Any real failure (different-config conflict, malformed config, SDK error, or a missing runtime bridge) produces a non-nil `NSError` and leaves the service layer uninitialized.
+Initializes the service layer and optionally the native Approov SDK. The call is forwarded to the SDK first, and the service layer resets its own internal state **only after the SDK reports success** — there are no service-layer same-config or reinit guards. A failed call therefore leaves the previous state completely intact: a layer that was protecting traffic keeps protecting it, and a layer in bypass mode stays in bypass mode. Only a first-ever initialization that fails leaves the layer uninitialized. The SDK itself determines whether a repeated initialization is compatible and returns `NO` with a `nil` error when it was already initialized with the same configuration. Any real failure (different-config conflict, malformed config, SDK error, or a missing runtime bridge) produces a non-nil `NSError` and returns before any service-layer state is touched, so `isInitialized` and `isApproovEnabled` keep whatever values they held before the call.
 
 ```objective-c
 NSError *error = nil;
 [ApproovService initialize:configString comment:nil error:&error];
 if (error != nil) {
-    // initialization failed — service layer is uninitialized
+    // initialization failed: the previous state is unchanged. The layer is uninitialized
+    // only if this was the first initialization attempt in the process.
 }
 ```
 
@@ -37,7 +38,7 @@ Due to the hybrid Swift/Objective-C architecture of the `approov-service-nsurlse
 > [!WARNING]
 > Crashing the application due to an initialization failure would render a released production application unusable. If this is a released production application, the recommended option is to handle any initialization error by logging the error to your telemetry and safely continuing execution without Approov protection.
 > 
-> Because initialization did not complete, `isInitialized` and `isApproovEnabled` evaluate to `NO`. In this state, all subsequent requests made via `ApproovNSURLSession` will automatically bypass Approov protection and proceed unprotected, keeping the application functional for your users.
+> When this is the first initialization attempt in the process, initialization did not complete and both `isInitialized` and `isApproovEnabled` evaluate to `NO`. In this state, all subsequent requests made via `ApproovNSURLSession` will automatically bypass Approov protection and proceed unprotected, keeping the application functional for your users. If the layer had already been initialized (either with a valid configuration or in empty-config bypass mode), that earlier state is retained instead and request processing continues exactly as before the failed call.
 
 **`config` parameter:** Pass a non-empty Approov configuration string for full SDK protection, or `@""` for empty-config bypass mode. The parameter is `_Nonnull`; passing `nil` is a compile-time error.
 
@@ -45,7 +46,7 @@ Due to the hybrid Swift/Objective-C architecture of the `approov-service-nsurlse
 
 Passing an empty config string enters empty-config bypass mode. In this mode `isInitialized` returns true, `isApproovEnabled` returns false, and the service layer behaves as a normal NSURLSession wrapper without token injection, trace headers, message signing, secure string substitution, secure string fetches, custom JWT fetches, dynamic pinning, or other native Approov SDK calls. All public methods that would otherwise call the platform SDK are guarded in this disabled mode.
 
-An empty-config bootstrap may later be upgraded by calling `initialize` again with a valid non-empty config string. If a non-empty initialization fails after an empty-config bypass, the service layer becomes uninitialized. Callers must re-initialize before using the service layer again.
+An empty-config bootstrap may later be upgraded by calling `initialize` again with a valid non-empty config string. If that non-empty initialization fails, bypass mode remains intact: `isInitialized` stays true, `isApproovEnabled` stays false, and requests continue to be forwarded unprotected. The upgrade can be retried later with a valid configuration.
 
 ### Re-initialization advisory
 

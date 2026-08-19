@@ -1407,9 +1407,20 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 }
                 continue;
             }
-            if (substitutionDecided && !shouldSubstitute && (status == ApproovTokenFetchStatusSuccess)) {
-                // A mutator deliberately skipped a substitution that would otherwise have happened.
-                ApproovLogInfo(@"%@: header substitution for %@ skipped by the service mutator", TAG, header);
+            if (substitutionDecided && !shouldSubstitute) {
+                // A mutator declined this substitution without raising an error, which is a skip for
+                // every status (the documented contract on ApproovServiceMutatorBridgeProtocol, and
+                // what approov-service-okhttp and approov-service-urlsession both do). The default
+                // mutator only reaches here for UNKNOWN_KEY, whose branch below is a no-op, so this
+                // is behaviour preserving unless a custom mutator overrides a failing status.
+                if (status == ApproovTokenFetchStatusSuccess) {
+                    ApproovLogInfo(@"%@: header substitution for %@ skipped by the service mutator", TAG, header);
+                } else if (status != ApproovTokenFetchStatusUnknownKey) {
+                    // The placeholder is now transmitted unsubstituted with no error raised, so the
+                    // status the default policy would have failed on must still be visible in the log.
+                    ApproovLogError(@"%@: header substitution for %@ skipped by the service mutator despite %@ - request proceeding with the unsubstituted value",
+                        TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+                }
                 continue;
             }
 
@@ -1517,8 +1528,14 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 }
                 continue;
             }
-            if (queryDecided && !shouldSubstituteQuery && (status == ApproovTokenFetchStatusSuccess)) {
-                ApproovLogInfo(@"%@: query substitution for %@ skipped by the service mutator", TAG, key);
+            if (queryDecided && !shouldSubstituteQuery) {
+                // Skip for every status, exactly as for header substitution above.
+                if (status == ApproovTokenFetchStatusSuccess) {
+                    ApproovLogInfo(@"%@: query substitution for %@ skipped by the service mutator", TAG, key);
+                } else if (status != ApproovTokenFetchStatusUnknownKey) {
+                    ApproovLogError(@"%@: query substitution for %@ skipped by the service mutator despite %@ - request proceeding with the unsubstituted value",
+                        TAG, key, [Approov stringFromApproovTokenFetchStatus:status]);
+                }
                 continue;
             }
 
