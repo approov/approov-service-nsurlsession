@@ -3,7 +3,7 @@ import Foundation
 import PackageDescription
 
 // The release tag for this version of ApproovNSURLSession.
-let releaseTAG = "dev"
+let releaseTAG = "3.5.5"
 
 // Production Approov SDK package version used by the public library products.
 let sdkVersion: Version = "3.5.3"

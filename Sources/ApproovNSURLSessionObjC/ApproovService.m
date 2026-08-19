@@ -88,7 +88,7 @@ static NSString *initializerLock = @"approov-service-nsurlsession";
 
 // version telemetry reported to the Approov SDK via setUserProperty. The "dev" placeholder is
 // stamped to the release version at tag time by the CI release job; main keeps "dev".
-static NSString *const versionUserProperty = @"approov-service-nsurlsession/dev";
+static NSString *const versionUserProperty = @"approov-service-nsurlsession/3.5.5";
 
 // has the ApproovService been initialized already
 static BOOL isInitialized = NO;

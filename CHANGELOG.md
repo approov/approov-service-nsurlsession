@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.5.5] - 2026-06-24
+## [3.5.5] - 2026-08-19
 
 ### Fixed
 
@@ -21,6 +21,9 @@
 - Release versioning now uses `dev` placeholders on `main` (Package.swift `releaseTAG`, the podspec `s.version`, and the `setUserProperty` string). A manual `workflow_dispatch` release job stamps the CHANGELOG version into all three and tags that commit; `main` keeps the placeholders so branches inherit them.
 
 ### CI
+
+- **Replace the release-time version stamping with a merge gate.** main now carries the released version rather than a `dev` placeholder, because the placeholder compiled `approov-service-nsurlsession/dev` into every non-release build, so `map.RequestBody.user-property` could not identify which version a device was running. The new `verify-version` job refuses any change whose CHANGELOG top entry is not a bare `## [x.y.z]` heading — which is what stops `[UNRELEASED]` reaching main — and requires the podspec, `Package.swift`, the compiled telemetry string and both README dependency snippets to carry that same version. It also rejects a version below the newest tag, and rejects reusing an existing tag when anything under `Sources/`, `Package.swift` or the podspec changed; a docs- or CI-only change may reuse the current version, and tagging is then skipped.
+- `tag-release` tags the merge commit on main when the version has no tag yet. There is no stamping commit any more, so the failure mode where a tag could point at unstamped content no longer exists.
 
 - The release job now runs with `set -euo pipefail` and asserts that the version stamp produced a commit before tagging that exact SHA. Previously a failed `git commit` fell through to `git tag`, tagging the unstamped `HEAD`, pushing it, and still reporting success.
 - `verify-release` now also asserts that both README dependency snippets reference the CHANGELOG's version. They are hand-edited rather than stamped, so they were the only version strings that could drift silently.

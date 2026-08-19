@@ -269,10 +269,13 @@
 
     NSString *userProperty = claims[@"user_property"];
     XCTAssertNotNil(userProperty, @"the layer must report itself through setUserProperty at initialization");
-    XCTAssertTrue([userProperty hasPrefix:@"approov-service-nsurlsession/"],
-                  @"expected a versioned layer identifier, got %@", userProperty);
-    XCTAssertTrue(userProperty.length > [@"approov-service-nsurlsession/" length],
-                  @"the version segment must not be empty: %@", userProperty);
+
+    // Assert the EXACT version, read from the podspec rather than hardcoded, so a release bump does
+    // not need a test edit and a partial bump cannot slip through. main now carries the released
+    // version instead of a "dev" placeholder, so this is knowable at test time; CI's verify-version
+    // job enforces the same agreement across CHANGELOG, Package.swift, README and this string.
+    NSString *expected = [NSString stringWithFormat:@"approov-service-nsurlsession/%@", [self podspecVersion]];
+    XCTAssertEqualObjects(userProperty, expected);
 }
 
 - (void)testSuccessWithEmptyTokenOmitsTheTokenHeader {
@@ -672,6 +675,24 @@
         caseName,
         caseName,
         body];
+}
+
+- (NSString *)podspecVersion {
+    // __FILE__ is Tests/ApproovNSURLSessionMiniSDKObjCTests/<this file>, so the repository root is
+    // three levels up. Reading the podspec keeps this test honest across version bumps.
+    NSString *root = [[[@(__FILE__) stringByDeletingLastPathComponent]
+                       stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    NSString *podspecPath = [root stringByAppendingPathComponent:@"approov-service-nsurlsession.podspec"];
+    NSString *podspec = [NSString stringWithContentsOfFile:podspecPath encoding:NSUTF8StringEncoding error:nil];
+    XCTAssertNotNil(podspec, @"could not read the podspec at %@", podspecPath);
+
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"s\\.version\\s*=\\s*\"([^\"]+)\""
+                                                                          options:0
+                                                                            error:nil];
+    NSTextCheckingResult *match = [regex firstMatchInString:podspec options:0
+                                                     range:NSMakeRange(0, podspec.length)];
+    XCTAssertNotNil(match, @"could not find s.version in the podspec");
+    return match ? [podspec substringWithRange:[match rangeAtIndex:1]] : @"";
 }
 
 - (NSDictionary *)decodeJWTBody:(NSString *)jwt {
