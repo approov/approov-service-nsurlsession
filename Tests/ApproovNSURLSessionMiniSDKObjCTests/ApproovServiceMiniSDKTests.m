@@ -247,6 +247,60 @@
     XCTAssertFalse([tokenHeader hasPrefix:@"(null)"]);
 }
 
+- (void)testUserPropertyReportsLayerAndVersionInTheToken {
+    // Restores the coverage dropped in c5f1d60. No mini-SDK accessor is needed: the fixture already
+    // records the user property set at initialization and emits it as the `user_property` token claim,
+    // so this asserts what actually reaches an attestation rather than what the source contains.
+    // The version segment is deliberately not hardcoded - CI stamps the "dev" placeholder at release,
+    // so the assertion is on the prefix plus a non-empty version.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+    XCTAssertNil(error);
+
+    NSString *token = [updatedRequest valueForHTTPHeaderField:@"Approov-Token"];
+    XCTAssertNotNil(token);
+    NSDictionary *claims = [self decodeJWTBody:token];
+    XCTAssertNotNil(claims);
+
+    NSString *userProperty = claims[@"user_property"];
+    XCTAssertNotNil(userProperty, @"the layer must report itself through setUserProperty at initialization");
+    XCTAssertTrue([userProperty hasPrefix:@"approov-service-nsurlsession/"],
+                  @"expected a versioned layer identifier, got %@", userProperty);
+    XCTAssertTrue(userProperty.length > [@"approov-service-nsurlsession/" length],
+                  @"the version segment must not be empty: %@", userProperty);
+}
+
+- (void)testEmptyTraceIDDoesNotProduceAnEmptyHeader {
+    // TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback": an empty artifact must be omitted,
+    // never sent as an empty-valued header. The SDK returns an empty string when no trace ID is
+    // available, so a nil check alone is not sufficient.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setApproovTraceIDHeader:@"Approov-TraceID"];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"traceID\":\"\""
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    XCTAssertNil([updatedRequest valueForHTTPHeaderField:@"Approov-TraceID"],
+                 @"an empty trace ID must not be sent as an empty-valued header");
+}
+
 #pragma mark - Secure Strings and Custom JWT
 
 - (void)testFetchSecureStringReturnsConfiguredValue {

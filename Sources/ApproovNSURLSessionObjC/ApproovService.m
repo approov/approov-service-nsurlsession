@@ -1112,7 +1112,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
     @synchronized(initializerLock) {
         traceIDHeader = approovTraceIDHeader;
     }
-    if ((traceIDHeader.length > 0) && (result.traceID != nil)) {
+    // The length check on result.traceID is deliberate and is NOT the same as a nil check: the SDK
+    // returns an empty string when no trace ID is available, and an empty-valued header is forbidden
+    // by TESTING_REQUIREMENTS section 2 just as a missing token header value is. The check on
+    // traceIDHeader remains a check on the configured header NAME.
+    if ((traceIDHeader.length > 0) && (result.traceID.length > 0)) {
         [request setValue:result.traceID forHTTPHeaderField:traceIDHeader];
     }
 }
@@ -1267,15 +1271,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 (status == ApproovTokenFetchStatusMITMDetected)) {
                 NSString *details = [NSString stringWithFormat:@"network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusNoApproovService) {
                 // we have a more permanent error from the Approov SDK
                 NSString *details = [NSString stringWithFormat:@"error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }
@@ -1295,8 +1303,17 @@ static NSUInteger sessionTaskSwizzleCount = 0;
         if (tokenValue.length == 0 && useApproovStatusIfNoToken) {
             tokenValue = [ApproovService headerValueForTokenFetchStatus:status];
         }
-        NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, tokenValue];
-        [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+        if (tokenValue.length > 0) {
+            NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, tokenValue];
+            [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+        } else {
+            // No token and no status fallback configured. Omit the header entirely: setting it here
+            // would send an empty value, or with a prefix configured a prefix-only value such as
+            // "Bearer ", both of which TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback"
+            // explicitly forbids. Evidence that Approov ran is provided by
+            // setUseApproovStatusIfNoToken, not by an empty header.
+            ApproovLogInfo(@"%@: no Approov token available, omitting the %@ header", TAG, tokenHeader);
+        }
     } else if ((status != ApproovTokenFetchStatusUnknownURL) &&
                (status != ApproovTokenFetchStatusUnprotectedURL) &&
                useApproovStatusIfNoToken) {
@@ -1364,9 +1381,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Header substitution rejection: %@ %@",
                     result.ARC, result.rejectionReasons];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
                         rejectionReasons:result.rejectionReasons];
+                }
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1375,15 +1394,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Header substitution error: %@",
                         [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }
@@ -1430,9 +1453,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution rejection %@ %@",
                     result.ARC, result.rejectionReasons];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
                         rejectionReasons:result.rejectionReasons];
+                }
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1441,15 +1466,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }
