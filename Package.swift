@@ -77,7 +77,14 @@ if useMiniSDKForTests {
         .testTarget(
             name: "ApproovNSURLSessionMiniSDKSwiftTests",
             dependencies: [
-                "ApproovNSURLSession"
+                "ApproovNSURLSession",
+                "ApproovNSURLSessionObjC",
+                // The mini SDK and its directive controller, so a Swift test can install a custom
+                // service mutator AND steer the fetch results it has to react to. Without these the
+                // Swift target could only test the mutator in isolation, never the interceptor path
+                // that is supposed to consult it.
+                .product(name: "Approov", package: testingMiniSDKPackageName),
+                .product(name: "MiniSDKTestSupport", package: testingMiniSDKPackageName)
             ],
             path: "Tests/ApproovNSURLSessionMiniSDKSwiftTests"
         )
