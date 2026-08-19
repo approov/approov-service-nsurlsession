@@ -214,4 +214,44 @@ import ApproovNSURLSessionObjC
             return 0
         }
     }
+
+    @objc public func handleInterceptorHeaderSubstitutionResult(_ result: Any,
+                                                               header: String,
+                                                               errorPointer: NSErrorPointer) -> Int {
+        guard let fetchResult = result as? ApproovTokenFetchResult else {
+            if ApproovService.shouldLog(at: .error) {
+                NSLog("[ApproovServiceMutatorBridge] Invalid result type passed to handleInterceptorHeaderSubstitutionResult")
+            }
+            return 0
+        }
+
+        do {
+            return try serviceMutator.handleInterceptorHeaderSubstitutionResult(fetchResult, header: header) ? 1 : 0
+        } catch {
+            if errorPointer != nil {
+                errorPointer?.pointee = error as NSError
+            }
+            return 0
+        }
+    }
+
+    @objc public func handleInterceptorQueryParamSubstitutionResult(_ result: Any,
+                                                                   queryKey: String,
+                                                                   errorPointer: NSErrorPointer) -> Int {
+        guard let fetchResult = result as? ApproovTokenFetchResult else {
+            if ApproovService.shouldLog(at: .error) {
+                NSLog("[ApproovServiceMutatorBridge] Invalid result type passed to handleInterceptorQueryParamSubstitutionResult")
+            }
+            return 0
+        }
+
+        do {
+            return try serviceMutator.handleInterceptorQueryParamSubstitutionResult(fetchResult, queryKey: queryKey) ? 1 : 0
+        } catch {
+            if errorPointer != nil {
+                errorPointer?.pointee = error as NSError
+            }
+            return 0
+        }
+    }
 }

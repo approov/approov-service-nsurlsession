@@ -63,6 +63,15 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
                errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 - (BOOL)shouldProcessPinningRequest:(NSURLRequest * _Nonnull)request;
 - (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+// Substitution decisions. Return 1 to substitute, 0 to skip. A mutator that wants the request to fail
+// throws, which arrives here as a non-nil errorPointer alongside 0; a 0 with no error means "skip this
+// substitution", which is how the default mutator reports UNKNOWN_KEY.
+- (NSInteger)handleInterceptorHeaderSubstitutionResult:(id _Nonnull)result
+                                                header:(NSString * _Nonnull)header
+                                          errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+- (NSInteger)handleInterceptorQueryParamSubstitutionResult:(id _Nonnull)result
+                                                  queryKey:(NSString * _Nonnull)queryKey
+                                              errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 @end
 
 NS_ASSUME_NONNULL_BEGIN

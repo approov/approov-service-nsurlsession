@@ -1370,6 +1370,49 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             result = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
             status = [result status];
             ApproovLogInfo(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+
+            // Ask the service mutator what to do with this result. A custom mutator can override the
+            // default policy per status; the default mutator reproduces the behaviour of the branches
+            // below. A returned 1 substitutes, a 0 with an error propagates that error, and a 0 with no
+            // error means skip this substitution (the default mutator's UNKNOWN_KEY answer). When the
+            // mutator declines without an error the typed-error branches below still run, so the error
+            // objects the public API has always produced are unchanged.
+            NSError *substitutionMutatorError = nil;
+            BOOL substitutionDecided = NO;
+            BOOL shouldSubstitute = NO;
+            @try {
+                shouldSubstitute = ([[ApproovService mutatorBridge]
+                    handleInterceptorHeaderSubstitutionResult:result
+                                                       header:header
+                                                 errorPointer:&substitutionMutatorError] != 0);
+                substitutionDecided = YES;
+            } @catch (NSException *exception) {
+                ApproovLogError(@"%@: header substitution mutator raised %@ - falling back to the default policy",
+                    TAG, exception.reason);
+            }
+            if (substitutionDecided && (substitutionMutatorError != nil)) {
+                ApproovLogError(@"%@: header substitution for %@ refused by the service mutator: %@ - request proceeding without Approov processing",
+                    TAG, header, substitutionMutatorError.localizedDescription);
+                if (error != nil) {
+                    *error = substitutionMutatorError;
+                }
+                return request;
+            }
+            if (substitutionDecided && shouldSubstitute) {
+                if (result.secureString.length > 0) {
+                    // update the header value with the actual secret
+                    [updatedRequest setValue:[NSString stringWithFormat:@"%@%@", prefix, result.secureString]
+                        forHTTPHeaderField:header];
+                    [substitutedHeaderKeys addObject:header];
+                }
+                continue;
+            }
+            if (substitutionDecided && !shouldSubstitute && (status == ApproovTokenFetchStatusSuccess)) {
+                // A mutator deliberately skipped a substitution that would otherwise have happened.
+                ApproovLogInfo(@"%@: header substitution for %@ skipped by the service mutator", TAG, header);
+                continue;
+            }
+
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the header value with the actual secret
@@ -1439,6 +1482,46 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             result = [Approov fetchSecureStringAndWait:matchText :nil];
             status = [result status];
             ApproovLogInfo(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
+
+            // Ask the service mutator, exactly as for header substitution above.
+            NSError *queryMutatorError = nil;
+            BOOL queryDecided = NO;
+            BOOL shouldSubstituteQuery = NO;
+            @try {
+                shouldSubstituteQuery = ([[ApproovService mutatorBridge]
+                    handleInterceptorQueryParamSubstitutionResult:result
+                                                         queryKey:key
+                                                     errorPointer:&queryMutatorError] != 0);
+                queryDecided = YES;
+            } @catch (NSException *exception) {
+                ApproovLogError(@"%@: query substitution mutator raised %@ - falling back to the default policy",
+                    TAG, exception.reason);
+            }
+            if (queryDecided && (queryMutatorError != nil)) {
+                ApproovLogError(@"%@: query substitution for %@ refused by the service mutator: %@ - request proceeding without Approov processing",
+                    TAG, key, queryMutatorError.localizedDescription);
+                if (error != nil) {
+                    *error = queryMutatorError;
+                }
+                return request;
+            }
+            if (queryDecided && shouldSubstituteQuery) {
+                if (result.secureString.length > 0) {
+                    // update the URL with the actual secret
+                    if (originalURL == nil) {
+                        originalURL = url;
+                    }
+                    url = [url stringByReplacingCharactersInRange:[match rangeAtIndex:1] withString:result.secureString];
+                    [updatedRequest setURL:[NSURL URLWithString:url]];
+                    [substitutedQueryParamKeys addObject:key];
+                }
+                continue;
+            }
+            if (queryDecided && !shouldSubstituteQuery && (status == ApproovTokenFetchStatusSuccess)) {
+                ApproovLogInfo(@"%@: query substitution for %@ skipped by the service mutator", TAG, key);
+                continue;
+            }
+
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the URL with the actual secret
