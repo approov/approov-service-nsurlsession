@@ -247,11 +247,22 @@ jobs:
             fi
           done
 
+          # The README dependency snippets are the one pair of version strings a customer copies, and
+          # they are NOT stamped by the release job - they are hand-edited. Without this check they are
+          # the only place the version can silently drift from the CHANGELOG.
+          for snippet in "approov-service-nsurlsession', '$VERSION'" "approov-service-nsurlsession.git\", from: \"$VERSION\""; do
+            if ! grep -qF "$snippet" README.md; then
+              echo "::error::README.md does not reference version $VERSION in a dependency snippet ($snippet)"
+              grep -nE "approov-service-nsurlsession('|\.git)" README.md || true
+              fail=1
+            fi
+          done
+
           if [ "$fail" -ne 0 ]; then
             echo "::error::Release placeholders missing. main must keep the dev placeholders so branches inherit them; the release job stamps them at tag time."
             exit 1
           fi
-          echo "OK: CHANGELOG version $VERSION present and dev placeholders intact. Tagging is manual (Actions -> Release)."
+          echo "OK: CHANGELOG version $VERSION present, README snippets match, dev placeholders intact. Tagging is manual (Actions -> Release)."
 
   # ---------------------------------------------------------------------------
   # Manual release (workflow_dispatch ONLY — the single place that tags).

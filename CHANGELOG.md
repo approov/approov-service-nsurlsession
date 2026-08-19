@@ -14,9 +14,17 @@
 
 ### CI
 
+- The release job now runs with `set -euo pipefail` and asserts that the version stamp produced a commit before tagging that exact SHA. Previously a failed `git commit` fell through to `git tag`, tagging the unstamped `HEAD`, pushing it, and still reporting success.
+- `verify-release` now also asserts that both README dependency snippets reference the CHANGELOG's version. They are hand-edited rather than stamped, so they were the only version strings that could drift silently.
+- **Note on scope:** the release job tags and pushes; SPM consumes tags directly, so SwiftPM releases are fully automated. Publishing the podspec to CocoaPods trunk is **not** automated here and remains a manual `pod trunk push` after the tag exists, since `main` deliberately keeps the `dev` placeholder and cannot be linted.
+
 - Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
 
 ### Documentation
+
+- `README.md` gains the two mandatory sections it was missing (`Manifest / Project Changes` and `Initializing ApproovService`), and the initialization example now shows the **empty-config bypass fallback** on failure, without which a failed initialization leaves the layer uninitialized rather than in bypass mode. Added the bundled Approov SDK badge and switched the SwiftPM badge to a live tag version.
+- Corrected the hybrid Swift/Objective-C snippet: both `initialize` overloads are `void` with a trailing `NSError**`, so Swift imports them as **throwing** - the previously documented `error:` argument form does not exist.
+- `REFERENCE.md` corrected on two contracts it described backwards: initialization state is reset only **after** SDK success, so a failed call leaves the previous state (including bypass mode) intact; and message-signing failures are fail-open as described above, rather than propagated as request failures.
 
 - GitHub-style README: added status badges and an `initialize` failure-handling example (correlation/session id + `getDeviceID` logging on success, unprotected fallback on failure) and a note that initialization must succeed before any protected request. Documented the same on the `initialize` method.
 
