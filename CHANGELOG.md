@@ -24,7 +24,7 @@
 
 - The release job now runs with `set -euo pipefail` and asserts that the version stamp produced a commit before tagging that exact SHA. Previously a failed `git commit` fell through to `git tag`, tagging the unstamped `HEAD`, pushing it, and still reporting success.
 - `verify-release` now also asserts that both README dependency snippets reference the CHANGELOG's version. They are hand-edited rather than stamped, so they were the only version strings that could drift silently.
-- **Note on scope:** the release job tags and pushes; SPM consumes tags directly, so SwiftPM releases are fully automated. Publishing the podspec to CocoaPods trunk is **not** automated here and remains a manual `pod trunk push` after the tag exists, since `main` deliberately keeps the `dev` placeholder and cannot be linted.
+- **Note on scope:** the release job tags and pushes; SPM consumes tags directly, so SwiftPM releases are fully automated. Publishing the podspec to CocoaPods trunk is **deliberately not** automated: CocoaPods is end of life, so it is supported manually with a `pod trunk push` from the release tag, after which `main` keeps its `dev` placeholder. Swift Package Manager is the supported integration path going forward.
 
 - Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
 

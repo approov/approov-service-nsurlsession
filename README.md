@@ -19,6 +19,10 @@ Note that the minimum requirements are iOS 11 and watchOS 9. You cannot use Appr
 
 ### CocoaPods
 
+> **CocoaPods is end of life.** New integrations should use [Swift Package Manager](#swift-package-manager)
+> below. CocoaPods releases of this layer are published manually and remain available for existing
+> integrations.
+
 The Approov integration is available via [`CocoaPods`](https://cocoapods.org/). This allows inclusion into the project by simply specifying a dependency in the `Podfile` for the app:
 
 ```
