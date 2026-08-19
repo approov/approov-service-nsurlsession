@@ -106,6 +106,38 @@ final class ApproovDefaultMessageSigningTests: XCTestCase {
         try assertMessageSigningFailsOpenUnsigned(factory: factory)
     }
 
+    func testInstallSignatureFailureLeavesNoContentDigest() throws {
+        // Regression: the fail-open return used to hand back the provider's request, which carries the
+        // Content-Digest that generateBodyDigest added before signing was attempted.
+        ApproovDefaultMessageSigning.setInstallMessageSignatureOverrideForTesting(nil)
+        defer { ApproovDefaultMessageSigning.clearMessageSignatureOverridesForTesting() }
+
+        let factory = try SignatureParametersFactory()
+            .setBaseParameters(SignatureParameters().addComponentIdentifier("@method"))
+            .setBodyDigestConfig(ApproovDefaultMessageSigning.DIGEST_SHA256, required: false)
+        try assertBodyDigestNotLeftUncovered(factory: factory)
+    }
+
+    func testNonRequiredBodyDigestDoesNotAbortTheRequest() throws {
+        // A non-required body digest must fail open (TESTING_REQUIREMENTS section 5). Signing itself
+        // succeeds here, so the request must come back signed regardless of the digest outcome.
+        ApproovDefaultMessageSigning.setInstallMessageSignatureOverrideForTesting(validInstallDERBase64())
+        defer { ApproovDefaultMessageSigning.clearMessageSignatureOverridesForTesting() }
+
+        let factory = try SignatureParametersFactory()
+            .setBaseParameters(SignatureParameters().addComponentIdentifier("@method"))
+            .setBodyDigestConfig(ApproovDefaultMessageSigning.DIGEST_SHA256, required: false)
+        let signer = ApproovDefaultMessageSigning().setDefaultFactory(factory)
+
+        let updatedRequest = try signer.processedRequest(staleSignedRequestWithBody(), changes: tokenChanges())
+
+        let signature = updatedRequest.value(forHTTPHeaderField: "Signature")
+        XCTAssertNotNil(signature)
+        // Byte-sequence encoding per RFC 8941, which nothing else in this suite asserts.
+        XCTAssertTrue(signature?.hasPrefix("install=:") == true, "expected a byte sequence, got \(signature ?? "nil")")
+        XCTAssertTrue(signature?.hasSuffix(":") == true)
+    }
+
     private func assertMessageSigningFailsOpenUnsigned(factory: SignatureParametersFactory,
                                                        file: StaticString = #filePath,
                                                        line: UInt = #line) throws {
@@ -116,6 +148,23 @@ final class ApproovDefaultMessageSigningTests: XCTestCase {
         XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Signature"), file: file, line: line)
         XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Signature-Input"), file: file, line: line)
         XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Signature-Base-Digest"), file: file, line: line)
+    }
+
+    /// Same contract as above but starting from a request WITH a replayable body, so the body-digest
+    /// path actually runs and adds `Content-Digest` before signing fails. Without a body,
+    /// `generateBodyDigest` returns early and the header is never created, which is why the
+    /// body-less fixture cannot catch an orphaned digest.
+    private func assertBodyDigestNotLeftUncovered(factory: SignatureParametersFactory,
+                                                  file: StaticString = #filePath,
+                                                  line: UInt = #line) throws {
+        let signer = ApproovDefaultMessageSigning().setDefaultFactory(factory)
+        let updatedRequest = try signer.processedRequest(staleSignedRequestWithBody(), changes: tokenChanges())
+
+        XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Signature"), file: file, line: line)
+        XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Signature-Input"), file: file, line: line)
+        // A body digest with no signature covering it is not "proceeds unsigned": the request must
+        // carry no signing artifacts at all (TESTING_REQUIREMENTS section 5).
+        XCTAssertNil(updatedRequest.value(forHTTPHeaderField: "Content-Digest"), file: file, line: line)
     }
 
     private func tokenChanges() -> ApproovRequestMutations {
@@ -131,6 +180,13 @@ final class ApproovDefaultMessageSigningTests: XCTestCase {
         request.setValue("stale-signature", forHTTPHeaderField: "Signature")
         request.setValue("stale-input", forHTTPHeaderField: "Signature-Input")
         request.setValue("stale-digest", forHTTPHeaderField: "Signature-Base-Digest")
+        return request
+    }
+
+    private func staleSignedRequestWithBody() -> URLRequest {
+        var request = staleSignedRequest()
+        request.httpBody = Data("field=value".utf8)
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         return request
     }
 

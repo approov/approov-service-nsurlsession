@@ -290,7 +290,12 @@ jobs:
 
       - name: Stamp version, commit and tag
         run: |
-          set -uo pipefail
+          # -e matters here: without it a failed `git commit` below would fall through to
+          # `git tag`, tagging the UNSTAMPED HEAD while the stamped edits sit in the working
+          # tree, and `git push` would publish it. The step's exit status is the push's, so it
+          # would report success and ship a release whose podspec, Package.swift and telemetry
+          # string all still read "dev".
+          set -euo pipefail
           VERSION="${{ steps.get-version.outputs.VERSION }}"
 
           if git fetch origin "refs/tags/$VERSION" --quiet 2>/dev/null; then
@@ -328,6 +333,15 @@ jobs:
 
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Belt and braces alongside `set -e`: assert the stamp actually became a commit, then tag
+          # that exact SHA rather than whatever HEAD happens to be.
+          BEFORE_SHA="$(git rev-parse HEAD)"
           git commit -am "Release version $VERSION"
-          git tag "$VERSION"
+          AFTER_SHA="$(git rev-parse HEAD)"
+          if [ "$BEFORE_SHA" = "$AFTER_SHA" ]; then
+            echo "::error::Version stamp produced no commit; refusing to tag $VERSION."
+            exit 1
+          fi
+          git tag "$VERSION" "$AFTER_SHA"
           git push origin "$VERSION"

@@ -130,6 +130,13 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
         removeHTTPHeaderField("Signature", from: &unsignedRequest)
         removeHTTPHeaderField("Signature-Input", from: &unsignedRequest)
         removeHTTPHeaderField("Signature-Base-Digest", from: &unsignedRequest)
+        // Content-Digest must go too. It is added by generateBodyDigest, which runs inside
+        // buildSignatureParameters BEFORE the fail-open block, and it mutates the provider's request
+        // in place - so every fail-open return here carries it unless it is removed. Leaving it would
+        // ship a body digest with no signature covering it, which is not the "proceeds unsigned"
+        // outcome TESTING_REQUIREMENTS section 5 describes, and on a re-processed request whose body
+        // is no longer replayable the digest would be stale as well.
+        removeHTTPHeaderField("Content-Digest", from: &unsignedRequest)
         return unsignedRequest
     }
 
@@ -197,9 +204,16 @@ public class ApproovDefaultMessageSigning: ApproovServiceMutator, CustomStringCo
             // Message signing is fail-open from here (core-project-approov#564): any failure to
             // build the signature base, obtain/decode the SDK signature, decode the ES256
             // ASN.1/DER signature, or serialize the headers logs at error level and proceeds
-            // UNSIGNED. The only fail-closed cases are a required body digest that cannot be
-            // generated (handled in buildSignatureParameters above) and an unsupported algorithm
-            // (checked above). The backend remains the enforcement point for message signatures.
+            // UNSIGNED. The backend remains the enforcement point for message signatures.
+            //
+            // Fail-closed cases, all of them raised from buildSignatureParameters above or from the
+            // guard immediately above, so none can be swallowed here:
+            //   - a REQUIRED body digest that cannot be generated or serialized;
+            //   - an unsupported or missing signature algorithm;
+            //   - an unsupported body digest ALGORITHM, which setBodyDigestConfig already rejects at
+            //     configuration time, so it is unreachable through the public API.
+            // A non-required body digest that cannot be generated or serialized fails OPEN, per
+            // TESTING_REQUIREMENTS section 5.
             do {
                 // Build the signature base
                 let baseBuilder = SignatureBaseBuilder(sigParams: params, ctx: provider)
@@ -643,17 +657,31 @@ public class SignatureParametersFactory {
             throw ApproovServiceError.permanentError(message: "Unsupported body digest algorithm: \(bodyDigestAlg)")
         }
 
-        // Add the digest header to the request
+        // Add the digest header to the request. A serialization failure aborts the request only when
+        // the digest is REQUIRED: TESTING_REQUIREMENTS section 5 lists a header serialization failure
+        // and a non-required body digest that cannot be generated as fail-open cases, so returning
+        // false here lets the caller proceed unsigned. Previously this threw regardless of
+        // `bodyDigestRequired`, from outside the fail-open block, which contradicted both section 5
+        // and this layer's own documented policy.
         do {
             guard let digestHeader = try SFV.serializeDictionary(key: bodyDigestAlg, data: digest) else {
-                throw ApproovServiceError.permanentError(message: "Failed to serialize Content-Digest header")
+                if bodyDigestRequired {
+                    throw ApproovServiceError.permanentError(message: "Failed to serialize required Content-Digest header")
+                }
+                os_log("ApproovService: failed to serialize Content-Digest header, proceeding without a body digest", type: .error)
+                return false
             }
             // Replace any existing digest so re-processing the same request
             // does not accumulate duplicate Content-Digest headers.
             request.setValue(digestHeader, forHTTPHeaderField: "Content-Digest")
             provider.setRequest(request)
         } catch let error {
-            throw ApproovServiceError.permanentError(message: "Failed to serialize Content-Digest header: \(error)")
+            if bodyDigestRequired {
+                throw ApproovServiceError.permanentError(message: "Failed to serialize required Content-Digest header: \(error)")
+            }
+            os_log("ApproovService: failed to serialize Content-Digest header, proceeding without a body digest: %@",
+                   type: .error, error.localizedDescription)
+            return false
         }
         _ = requestParameters.addComponentIdentifier("Content-Digest")
         return true
