@@ -3,6 +3,7 @@ name: Build and Test
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -48,7 +49,7 @@ jobs:
         with:
           repository: approov/core-service-layers-testing
           token: ${{ secrets.CORE_SERVICE_LAYERS_TESTING_PAT }}
-          ref: 1dbc1bba2135f20cd7a9868ac2eeea881906310c
+          ref: a5adaaccd18b53d4511cd65987b5ac25517b8c9c
           path: core-service-layers-testing
 
       - name: Configure mini-SDK path
@@ -196,3 +197,140 @@ jobs:
 
           sys.exit(0 if overall_ok else 1)
           EOF
+
+  # ---------------------------------------------------------------------------
+  # Version consistency gate (verification ONLY — never tags).
+  #
+  # The released version lives IN main rather than being stamped at tag time. That
+  # is deliberate: a build from main must be identifiable in the attestation
+  # records, and the previous placeholder scheme compiled
+  # "approov-service-nsurlsession/dev" into every non-release build, so
+  # map.RequestBody.user-property could not tell you which version a device ran.
+  #
+  # This job is what makes that safe. It refuses to let main carry an inconsistent
+  # or unreleasable version: no [UNRELEASED] heading, and CHANGELOG, podspec,
+  # Package.swift, the compiled telemetry string and both README dependency
+  # snippets must all agree.
+  # ---------------------------------------------------------------------------
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: CHANGELOG, manifests, telemetry and README must agree
+        id: version
+        run: |
+          set -euo pipefail
+
+          HEADING=$(grep -m1 '^## ' CHANGELOG.md || true)
+          if [ -z "$HEADING" ]; then
+            echo "::error::CHANGELOG.md has no '## ' entry"
+            exit 1
+          fi
+          echo "CHANGELOG heading: $HEADING"
+
+          # Anything that is not a bare semver heading is refused, which is what stops
+          # [UNRELEASED] (or [Unreleased], or a bare date) reaching main.
+          VERSION=$(printf '%s' "$HEADING" | sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p')
+          if [ -z "$VERSION" ]; then
+            echo "::error::CHANGELOG.md top entry is not a released version: $HEADING"
+            echo "::error::Expected '## [x.y.z] - <date>'. An unreleased placeholder must not be merged to main."
+            exit 1
+          fi
+          echo "Release version: $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+          fail=0
+          check() { # description, expected-substring, file
+            if grep -qF "$2" "$3"; then
+              echo "  ok: $1"
+            else
+              echo "::error::$1 does not carry version $VERSION ($3)"
+              fail=1
+            fi
+          }
+
+          check "podspec s.version"          "s.version      = \"$VERSION\""            approov-service-nsurlsession.podspec
+          check "Package.swift releaseTAG"   "releaseTAG = \"$VERSION\""                 Package.swift
+          check "telemetry user property"    "approov-service-nsurlsession/$VERSION"     Sources/ApproovNSURLSessionObjC/ApproovService.m
+          check "README CocoaPods snippet"   "approov-service-nsurlsession', '$VERSION'" README.md
+          check "README SwiftPM snippet"     "approov-service-nsurlsession.git\", from: \"$VERSION\"" README.md
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Version mismatch. Every one of the files above must carry $VERSION before this can merge to main."
+            exit 1
+          fi
+
+          # A bump is required only when something that SHIPS changed. A docs- or CI-only
+          # change may reuse the current version, and the release job then skips tagging;
+          # nothing under Sources/, Package.swift or the podspec moved, so the compiled
+          # version string is still truthful.
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          SHIPPING_CHANGED=no
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            if git diff --name-only "$BASE" HEAD -- Sources Package.swift '*.podspec' | grep -q .; then
+              SHIPPING_CHANGED=yes
+            fi
+          else
+            echo "no usable base commit; treating this as a shipping change"
+            SHIPPING_CHANGED=yes
+          fi
+          echo "Shipping files changed: $SHIPPING_CHANGED"
+
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            if [ "$SHIPPING_CHANGED" = "yes" ]; then
+              echo "::error::Tag $VERSION already exists and this change touches Sources/, Package.swift or the podspec."
+              echo "::error::Bump the version in all of the files above, or drop the shipping changes."
+              exit 1
+            fi
+            echo "Tag $VERSION already exists and nothing shipping changed; reusing it and skipping the tag."
+          else
+            NEWEST=$(git tag --sort=-v:refname | head -1 || true)
+            echo "Newest existing tag: ${NEWEST:-none}"
+            if [ -n "$NEWEST" ]; then
+              LOWEST=$(printf '%s\n%s\n' "$VERSION" "$NEWEST" | sort -V | head -1)
+              if [ "$VERSION" != "$NEWEST" ] && [ "$LOWEST" = "$VERSION" ]; then
+                echo "::error::CHANGELOG version $VERSION is lower than the newest tag $NEWEST"
+                exit 1
+              fi
+            fi
+          fi
+          echo "OK: $VERSION is consistent across CHANGELOG, manifests, telemetry and README."
+
+  # ---------------------------------------------------------------------------
+  # Tag on merge to main. The version has already been proved consistent by
+  # verify-version, so this only has to decide whether the tag exists yet.
+  # ---------------------------------------------------------------------------
+  tag-release:
+    needs: [build-and-test, verify-version]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag the merge commit
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "Tag $VERSION already exists; nothing to do (non-shipping merge)."
+            exit 0
+          fi
+
+          # No stamping step, so there is no commit to make and nothing that can leave the
+          # tag pointing at unstamped content: the tree already carries the version.
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/$VERSION"
+          echo "Tagged $VERSION at $GITHUB_SHA"
+          echo "CocoaPods is end of life and published manually: pod trunk push approov-service-nsurlsession.podspec from the tag."

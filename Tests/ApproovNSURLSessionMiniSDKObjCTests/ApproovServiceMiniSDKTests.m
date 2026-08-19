@@ -247,6 +247,115 @@
     XCTAssertFalse([tokenHeader hasPrefix:@"(null)"]);
 }
 
+- (void)testUserPropertyReportsLayerAndVersionInTheToken {
+    // Restores the coverage dropped in c5f1d60. No mini-SDK accessor is needed: the fixture already
+    // records the user property set at initialization and emits it as the `user_property` token claim,
+    // so this asserts what actually reaches an attestation rather than what the source contains.
+    // The version segment is deliberately not hardcoded - CI stamps the "dev" placeholder at release,
+    // so the assertion is on the prefix plus a non-empty version.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+    XCTAssertNil(error);
+
+    NSString *token = [updatedRequest valueForHTTPHeaderField:@"Approov-Token"];
+    XCTAssertNotNil(token);
+    NSDictionary *claims = [self decodeJWTBody:token];
+    XCTAssertNotNil(claims);
+
+    NSString *userProperty = claims[@"user_property"];
+    XCTAssertNotNil(userProperty, @"the layer must report itself through setUserProperty at initialization");
+
+    // Assert the EXACT version, read from the podspec rather than hardcoded, so a release bump does
+    // not need a test edit and a partial bump cannot slip through. main now carries the released
+    // version instead of a "dev" placeholder, so this is knowable at test time; CI's verify-version
+    // job enforces the same agreement across CHANGELOG, Package.swift, README and this string.
+    NSString *expected = [NSString stringWithFormat:@"approov-service-nsurlsession/%@", [self podspecVersion]];
+    XCTAssertEqualObjects(userProperty, expected);
+}
+
+- (void)testSuccessWithEmptyTokenOmitsTheTokenHeader {
+    // TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback": with no token available and the
+    // status fallback disabled, the header must be OMITTED - not sent empty, and not sent as the prefix
+    // alone. A domain registered for secure-string substitution or pinning only reaches exactly this
+    // shape: the fetch succeeds but no token is minted for it.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setApproovTokenPrefix:@"Bearer "];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"emptyToken\":true"
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    NSString *tokenHeader = [updatedRequest valueForHTTPHeaderField:@"Approov-Token"];
+    XCTAssertNil(tokenHeader,
+                 @"expected the token header to be omitted, got %@", tokenHeader ? [NSString stringWithFormat:@"\"%@\"", tokenHeader] : @"nil");
+}
+
+- (void)testEmptyTokenWithStatusFallbackEnabledSendsTheStatus {
+    // The counterpart: setUseApproovStatusIfNoToken is the supported way to give the backend evidence
+    // that Approov ran, so with it enabled the header carries the status rather than being omitted.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setUseApproovStatusIfNoToken:YES];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"emptyToken\":true"
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    XCTAssertEqualObjects([updatedRequest valueForHTTPHeaderField:@"Approov-Token"], @"SUCCESS");
+}
+
+- (void)testEmptyTraceIDDoesNotProduceAnEmptyHeader {
+    // TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback": an empty artifact must be omitted,
+    // never sent as an empty-valued header. The SDK returns an empty string when no trace ID is
+    // available, so a nil check alone is not sufficient.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setApproovTraceIDHeader:@"Approov-TraceID"];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"traceID\":\"\""
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    XCTAssertNil([updatedRequest valueForHTTPHeaderField:@"Approov-TraceID"],
+                 @"an empty trace ID must not be sent as an empty-valued header");
+}
+
 #pragma mark - Secure Strings and Custom JWT
 
 - (void)testFetchSecureStringReturnsConfiguredValue {
@@ -377,6 +486,57 @@
 
     XCTAssertEqual(disposition, NSURLSessionAuthChallengeCancelAuthenticationChallenge);
     XCTAssertNil(credential);
+}
+
+#pragma mark - Null error pointer crash regression (updateRequestWithApproov:error:)
+
+- (void)testHeaderSubstitutionRejectionWithNullErrorDoesNotCrash {
+    // Establish a protected domain so updateRequestWithApproov processes the request.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService addSubstitutionHeader:@"X-API-Key" requiredPrefix:nil];
+
+    // The directive is operation-specific: fetchApproovToken consumes the scenario (not this
+    // directive), then fetchSecureString consumes this directive and returns REJECTED.
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchSecureString\","
+          @"\"response\":{"
+            @"\"status\":\"REJECTED\","
+            @"\"ARC\":\"test-arc\","
+            @"\"rejectionReasons\":\"test-reason\""
+          @"}"
+        @"}"];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    [request setValue:@"placeholder-key" forHTTPHeaderField:@"X-API-Key"];
+
+    // Pre-fix: writing *error without a nil check crashed when error was NULL.
+    NSURLRequest *result = [ApproovService updateRequestWithApproov:request
+                                                     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                             error:NULL];
+    XCTAssertNotNil(result);
+}
+
+- (void)testQueryParamSubstitutionNetworkFailureWithNullErrorDoesNotCrash {
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService addSubstitutionQueryParam:@"api-key"];
+
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchSecureString\","
+          @"\"response\":{"
+            @"\"status\":\"NO_NETWORK\""
+          @"}"
+        @"}"];
+
+    NSString *urlWithParam = [[self targetURLString] stringByAppendingString:@"?api-key=placeholder-key"];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlWithParam]];
+
+    // Pre-fix: writing *error without a nil check crashed when error was NULL.
+    NSURLRequest *result = [ApproovService updateRequestWithApproov:request
+                                                     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                             error:NULL];
+    XCTAssertNotNil(result);
 }
 
 #pragma mark - Helpers
@@ -515,6 +675,24 @@
         caseName,
         caseName,
         body];
+}
+
+- (NSString *)podspecVersion {
+    // __FILE__ is Tests/ApproovNSURLSessionMiniSDKObjCTests/<this file>, so the repository root is
+    // three levels up. Reading the podspec keeps this test honest across version bumps.
+    NSString *root = [[[@(__FILE__) stringByDeletingLastPathComponent]
+                       stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    NSString *podspecPath = [root stringByAppendingPathComponent:@"approov-service-nsurlsession.podspec"];
+    NSString *podspec = [NSString stringWithContentsOfFile:podspecPath encoding:NSUTF8StringEncoding error:nil];
+    XCTAssertNotNil(podspec, @"could not read the podspec at %@", podspecPath);
+
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"s\\.version\\s*=\\s*\"([^\"]+)\""
+                                                                          options:0
+                                                                            error:nil];
+    NSTextCheckingResult *match = [regex firstMatchInString:podspec options:0
+                                                     range:NSMakeRange(0, podspec.length)];
+    XCTAssertNotNil(match, @"could not find s.version in the podspec");
+    return match ? [podspec substringWithRange:[match rangeAtIndex:1]] : @"";
 }
 
 - (NSDictionary *)decodeJWTBody:(NSString *)jwt {

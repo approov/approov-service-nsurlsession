@@ -86,6 +86,10 @@ static NSMutableDictionary<NSString *, NSString *> *substitutionHeaders = nil;
 // lock object used during initialization
 static NSString *initializerLock = @"approov-service-nsurlsession";
 
+// version telemetry reported to the Approov SDK via setUserProperty. The "dev" placeholder is
+// stamped to the release version at tag time by the CI release job; main keeps "dev".
+static NSString *const versionUserProperty = @"approov-service-nsurlsession/3.5.5";
+
 // has the ApproovService been initialized already
 static BOOL isInitialized = NO;
 
@@ -347,7 +351,7 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             if (!sdkInitialized) {
                 ApproovLogDebug(@"%@: Approov SDK already initialized", TAG);
             }
-            [Approov setUserProperty:(NSString *)initializerLock];
+            [Approov setUserProperty:versionUserProperty];
             sessionTaskObserver = [[ApproovSessionTaskObserver alloc] init];
             [ApproovService swizzleSessionTask];
         } else {
@@ -1108,7 +1112,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
     @synchronized(initializerLock) {
         traceIDHeader = approovTraceIDHeader;
     }
-    if ((traceIDHeader.length > 0) && (result.traceID != nil)) {
+    // The length check on result.traceID is deliberate and is NOT the same as a nil check: the SDK
+    // returns an empty string when no trace ID is available, and an empty-valued header is forbidden
+    // by TESTING_REQUIREMENTS section 2 just as a missing token header value is. The check on
+    // traceIDHeader remains a check on the configured header NAME.
+    if ((traceIDHeader.length > 0) && (result.traceID.length > 0)) {
         [request setValue:result.traceID forHTTPHeaderField:traceIDHeader];
     }
 }
@@ -1263,15 +1271,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 (status == ApproovTokenFetchStatusMITMDetected)) {
                 NSString *details = [NSString stringWithFormat:@"network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusNoApproovService) {
                 // we have a more permanent error from the Approov SDK
                 NSString *details = [NSString stringWithFormat:@"error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                if (error != nil)
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
                     *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }
@@ -1291,8 +1303,17 @@ static NSUInteger sessionTaskSwizzleCount = 0;
         if (tokenValue.length == 0 && useApproovStatusIfNoToken) {
             tokenValue = [ApproovService headerValueForTokenFetchStatus:status];
         }
-        NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, tokenValue];
-        [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+        if (tokenValue.length > 0) {
+            NSString *value = [NSString stringWithFormat:@"%@%@", tokenPrefix, tokenValue];
+            [updatedRequest setValue:value forHTTPHeaderField:tokenHeader];
+        } else {
+            // No token and no status fallback configured. Omit the header entirely: setting it here
+            // would send an empty value, or with a prefix configured a prefix-only value such as
+            // "Bearer ", both of which TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback"
+            // explicitly forbids. Evidence that Approov ran is provided by
+            // setUseApproovStatusIfNoToken, not by an empty header.
+            ApproovLogInfo(@"%@: no Approov token available, omitting the %@ header", TAG, tokenHeader);
+        }
     } else if ((status != ApproovTokenFetchStatusUnknownURL) &&
                (status != ApproovTokenFetchStatusUnprotectedURL) &&
                useApproovStatusIfNoToken) {
@@ -1349,6 +1370,60 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             result = [Approov fetchSecureStringAndWait:[value substringFromIndex:prefix.length] :nil];
             status = [result status];
             ApproovLogInfo(@"%@: substituting header %@: %@", TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+
+            // Ask the service mutator what to do with this result. A custom mutator can override the
+            // default policy per status; the default mutator reproduces the behaviour of the branches
+            // below. A returned 1 substitutes, a 0 with an error propagates that error, and a 0 with no
+            // error means skip this substitution (the default mutator's UNKNOWN_KEY answer). When the
+            // mutator declines without an error the typed-error branches below still run, so the error
+            // objects the public API has always produced are unchanged.
+            NSError *substitutionMutatorError = nil;
+            BOOL substitutionDecided = NO;
+            BOOL shouldSubstitute = NO;
+            @try {
+                shouldSubstitute = ([[ApproovService mutatorBridge]
+                    handleInterceptorHeaderSubstitutionResult:result
+                                                       header:header
+                                                 errorPointer:&substitutionMutatorError] != 0);
+                substitutionDecided = YES;
+            } @catch (NSException *exception) {
+                ApproovLogError(@"%@: header substitution mutator raised %@ - falling back to the default policy",
+                    TAG, exception.reason);
+            }
+            if (substitutionDecided && (substitutionMutatorError != nil)) {
+                ApproovLogError(@"%@: header substitution for %@ refused by the service mutator: %@ - request proceeding without Approov processing",
+                    TAG, header, substitutionMutatorError.localizedDescription);
+                if (error != nil) {
+                    *error = substitutionMutatorError;
+                }
+                return request;
+            }
+            if (substitutionDecided && shouldSubstitute) {
+                if (result.secureString.length > 0) {
+                    // update the header value with the actual secret
+                    [updatedRequest setValue:[NSString stringWithFormat:@"%@%@", prefix, result.secureString]
+                        forHTTPHeaderField:header];
+                    [substitutedHeaderKeys addObject:header];
+                }
+                continue;
+            }
+            if (substitutionDecided && !shouldSubstitute) {
+                // A mutator declined this substitution without raising an error, which is a skip for
+                // every status (the documented contract on ApproovServiceMutatorBridgeProtocol, and
+                // what approov-service-okhttp and approov-service-urlsession both do). The default
+                // mutator only reaches here for UNKNOWN_KEY, whose branch below is a no-op, so this
+                // is behaviour preserving unless a custom mutator overrides a failing status.
+                if (status == ApproovTokenFetchStatusSuccess) {
+                    ApproovLogInfo(@"%@: header substitution for %@ skipped by the service mutator", TAG, header);
+                } else if (status != ApproovTokenFetchStatusUnknownKey) {
+                    // The placeholder is now transmitted unsubstituted with no error raised, so the
+                    // status the default policy would have failed on must still be visible in the log.
+                    ApproovLogError(@"%@: header substitution for %@ skipped by the service mutator despite %@ - request proceeding with the unsubstituted value",
+                        TAG, header, [Approov stringFromApproovTokenFetchStatus:status]);
+                }
+                continue;
+            }
+
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the header value with the actual secret
@@ -1360,8 +1435,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Header substitution rejection: %@ %@",
                     result.ARC, result.rejectionReasons];
-                *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
-                    rejectionReasons:result.rejectionReasons];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
+                        rejectionReasons:result.rejectionReasons];
+                }
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1370,13 +1448,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Header substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"network" message:details];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Header substitution error: %@",
                         [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"general" message:details];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }
@@ -1398,7 +1482,8 @@ static NSUInteger sessionTaskSwizzleCount = 0;
         if (regexError) {
             NSString *details = [NSString stringWithFormat: @"Approov query parameter substitution regex error: %@",
                 [regexError localizedDescription]];
-            *error = [ApproovService createErrorWithType:@"general" message:details];
+            if (error != nil)
+                *error = [ApproovService createErrorWithType:@"general" message:details];
             return request;
         }
         NSTextCheckingResult *match = [regex firstMatchInString:url options:0 range:NSMakeRange(0, [url length])];
@@ -1408,6 +1493,52 @@ static NSUInteger sessionTaskSwizzleCount = 0;
             result = [Approov fetchSecureStringAndWait:matchText :nil];
             status = [result status];
             ApproovLogInfo(@"%@: substituting query parameter %@: %@", TAG, key, [Approov stringFromApproovTokenFetchStatus:result.status]);
+
+            // Ask the service mutator, exactly as for header substitution above.
+            NSError *queryMutatorError = nil;
+            BOOL queryDecided = NO;
+            BOOL shouldSubstituteQuery = NO;
+            @try {
+                shouldSubstituteQuery = ([[ApproovService mutatorBridge]
+                    handleInterceptorQueryParamSubstitutionResult:result
+                                                         queryKey:key
+                                                     errorPointer:&queryMutatorError] != 0);
+                queryDecided = YES;
+            } @catch (NSException *exception) {
+                ApproovLogError(@"%@: query substitution mutator raised %@ - falling back to the default policy",
+                    TAG, exception.reason);
+            }
+            if (queryDecided && (queryMutatorError != nil)) {
+                ApproovLogError(@"%@: query substitution for %@ refused by the service mutator: %@ - request proceeding without Approov processing",
+                    TAG, key, queryMutatorError.localizedDescription);
+                if (error != nil) {
+                    *error = queryMutatorError;
+                }
+                return request;
+            }
+            if (queryDecided && shouldSubstituteQuery) {
+                if (result.secureString.length > 0) {
+                    // update the URL with the actual secret
+                    if (originalURL == nil) {
+                        originalURL = url;
+                    }
+                    url = [url stringByReplacingCharactersInRange:[match rangeAtIndex:1] withString:result.secureString];
+                    [updatedRequest setURL:[NSURL URLWithString:url]];
+                    [substitutedQueryParamKeys addObject:key];
+                }
+                continue;
+            }
+            if (queryDecided && !shouldSubstituteQuery) {
+                // Skip for every status, exactly as for header substitution above.
+                if (status == ApproovTokenFetchStatusSuccess) {
+                    ApproovLogInfo(@"%@: query substitution for %@ skipped by the service mutator", TAG, key);
+                } else if (status != ApproovTokenFetchStatusUnknownKey) {
+                    ApproovLogError(@"%@: query substitution for %@ skipped by the service mutator despite %@ - request proceeding with the unsubstituted value",
+                        TAG, key, [Approov stringFromApproovTokenFetchStatus:status]);
+                }
+                continue;
+            }
+
             if (status == ApproovTokenFetchStatusSuccess) {
                 if (result.secureString.length > 0) {
                     // update the URL with the actual secret
@@ -1422,8 +1553,11 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // the attestation has been rejected so provide additional information in the message
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution rejection %@ %@",
                     result.ARC, result.rejectionReasons];
-                *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
-                    rejectionReasons:result.rejectionReasons];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createRejectionErrorWithMessage:details rejectionARC:result.ARC
+                        rejectionReasons:result.rejectionReasons];
+                }
                 return request;
             } else if ((status == ApproovTokenFetchStatusNoNetwork) ||
                        (status == ApproovTokenFetchStatusPoorNetwork) ||
@@ -1432,13 +1566,19 @@ static NSUInteger sessionTaskSwizzleCount = 0;
                 // be retried by the user later
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution network error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"network" message:details];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"network" message:details];
+                }
                 return request;
             } else if (status != ApproovTokenFetchStatusUnknownKey) {
                 // we have failed to get a secure string with a more serious permanent error
                 NSString *details = [NSString stringWithFormat:@"Approov query parameter substitution error: %@",
                     [Approov stringFromApproovTokenFetchStatus:status]];
-                *error = [ApproovService createErrorWithType:@"general" message:details];
+                ApproovLogError(@"%@: %@ - request proceeding without Approov processing", TAG, details);
+                if (error != nil) {
+                    *error = [ApproovService createErrorWithType:@"general" message:details];
+                }
                 return request;
             }
         }

@@ -1,5 +1,43 @@
 # Changelog
 
+## [3.5.5] - 2026-08-19
+
+### Fixed
+
+- Wire the secure-string substitution decisions to the service mutator. `handleInterceptorHeaderSubstitutionResult` and `handleInterceptorQueryParamSubstitutionResult` were declared on `ApproovServiceMutator` with default implementations but had **no call sites**: the Objective-C interceptor decided substitution with hardcoded status logic, so a custom mutator could not influence it at all. Both hooks are now reachable through `ApproovServiceMutatorBridgeProtocol` and are consulted per substitution. A mutator returning true substitutes, a mutator that throws fails the request with its own error, and a mutator returning false skips that substitution **for any status**, matching `approov-service-okhttp` and `approov-service-urlsession`, which have no post-mutator fallback at all. This is behaviour preserving without a custom mutator: the default mutator only declines without throwing for `UNKNOWN_KEY`, whose branch was already a no-op, so the typed errors this API has always produced are unchanged. A skip on a status the default policy would have failed on is logged at error level, since the placeholder is then transmitted unsubstituted with no error raised.
+- Fix the default mutator's substitution policy for `NO_NETWORK`, `POOR_NETWORK` and `MITM_DETECTED`. The (previously unreachable) defaults returned `true`, which would have substituted from a result carrying no secure string and, for `MITM_DETECTED`, proceeded after the SDK reported interception. They now throw, matching `approov-service-urlsession` and `approov-service-okhttp`. This is why the hooks had to be wired and the defaults corrected in the same change: connecting them alone would have turned dead code into a live fail-open.
+
+- Never emit an empty or prefix-only Approov token header. With no token available and `setUseApproovStatusIfNoToken` disabled, the header was still set to the prefix plus an empty string, producing `Approov-Token: Bearer ` or an empty value. It is now omitted, per `TESTING_REQUIREMENTS.md` §2 "Missing Artifacts Fallback"; the status fallback remains the supported way to give the backend evidence that Approov ran.
+- Never emit an empty trace-ID header. The guard tested `result.traceID != nil`, but the SDK returns an empty string when no trace ID is available, so an empty-valued header could be sent. It now tests the value's length. Regression test added and negative-checked.
+- Log at error level whenever `updateRequestWithApproov` returns a request without applying Approov processing. Eight such returns wrote only to the `error` out-parameter, so a caller passing `NULL` — permitted by the `_Nullable` annotation — received an unprotected request with no error and, at three of the sites, no log at any level. Rejections were the worst case: an attestation rejection silently produced an unmodified request. The `error` writes are also now braced, since the un-braced two-line bodies were one edit away from letting a log statement escape the guard.
+- Restored the telemetry regression test dropped in `c5f1d60`. It no longer needs an unreleased mini-SDK accessor: the fixture already emits the user property as the `user_property` token claim, so the test decodes the issued token and asserts a versioned `approov-service-nsurlsession/…` identifier, which is what actually reaches an attestation rather than what the source contains.
+
+- Message signing now conforms to the fail-open policy (approov/core-project-approov#564). Every signature-build failure — building the signature base, retrieving or decoding the install/account signature, decoding the ES256 ASN.1/DER signature, or serializing the signature headers — now logs at error and proceeds **unsigned** instead of aborting the request, since the backend is the enforcement point. Only a **required body digest** that cannot be generated or serialized, and an **unsupported or missing signature algorithm**, still fail closed. A **non-required** body digest that cannot be generated or serialized now also fails open, and any signature headers already present on the request (`Signature`, `Signature-Input`, `Signature-Base-Digest`) plus any `Content-Digest` this layer added are removed on every fail-open path, so a request that proceeds unsigned carries no stale or uncovered signing artifacts.
+- `setUserProperty` reported the bare `"approov-service-nsurlsession"` lock object instead of a versioned telemetry string; it now reports `approov-service-nsurlsession/<version>` (stamped from the release tag), so the active service-layer version is visible in server logs.
+- `updateRequestWithApproov:...error:` wrote through the `error` out-parameter without a nil check in the header/query secure-string substitution paths; a caller passing `NULL` (permitted by the `_Nullable` annotation) would crash on a rejection or network failure. All such writes are now guarded.
+
+### Documentation
+
+- Corrected the initialization failure contract in `REFERENCE.md`, which contradicted itself and the code in four places. `initialize:comment:error:` returns **before** any service-layer state is touched when the SDK reports a real failure or the Swift bridge cannot be found, so the previous state survives: a layer that was protecting traffic keeps protecting it, and a layer in empty-config bypass mode stays in bypass mode with `isInitialized` true and `isApproovEnabled` false. Only a first-ever initialization failure leaves the layer uninitialized. The document previously also stated the opposite ("leaves the service layer uninitialized"), including for a failed upgrade out of bypass mode, which `TESTING_REQUIREMENTS.md` §1 requires to remain intact.
+
+### CI
+
+- **Replace the release-time version stamping with a merge gate.** main now carries the released version rather than a `dev` placeholder, because the placeholder compiled `approov-service-nsurlsession/dev` into every non-release build, so `map.RequestBody.user-property` could not identify which version a device was running. The new `verify-version` job refuses any change whose CHANGELOG top entry is not a bare `## [x.y.z]` heading — which is what stops `[UNRELEASED]` reaching main — and requires the podspec, `Package.swift`, the compiled telemetry string and both README dependency snippets to carry that same version. It also rejects a version below the newest tag, and rejects reusing an existing tag when anything under `Sources/`, `Package.swift` or the podspec changed; a docs- or CI-only change may reuse the current version, and tagging is then skipped.
+- `tag-release` tags the merge commit on main when the version has no tag yet. There is no stamping commit any more, so the failure mode where a tag could point at unstamped content no longer exists.
+
+- **Note on scope:** `tag-release` tags and pushes; SPM consumes tags directly, so SwiftPM releases are fully automated. Publishing the podspec to CocoaPods trunk is **deliberately not** automated: CocoaPods is end of life, so it is supported manually with a `pod trunk push` from the release tag. Swift Package Manager is the supported integration path going forward.
+
+- Added a `verify-release` check (push/PR) asserting the CHANGELOG top entry and the `dev` placeholders are present, and a manual `release` job (gated on build-and-test) that stamps the version and tags. Tagging stays manual.
+
+### Documentation
+
+- `README.md` gains the two mandatory sections it was missing (`Manifest / Project Changes` and `Initializing ApproovService`), and the initialization example now shows the **empty-config bypass fallback** on failure, without which a failed initialization leaves the layer uninitialized rather than in bypass mode. Added the bundled Approov SDK badge and switched the SwiftPM badge to a live tag version.
+- Corrected the hybrid Swift/Objective-C snippet: both `initialize` overloads are `void` with a trailing `NSError**`, so Swift imports them as **throwing** - the previously documented `error:` argument form does not exist.
+- `REFERENCE.md` corrected on two contracts it described backwards: initialization state is reset only **after** SDK success, so a failed call leaves the previous state (including bypass mode) intact; and message-signing failures are fail-open as described above, rather than propagated as request failures.
+
+- GitHub-style README: added status badges and an `initialize` failure-handling example (correlation/session id + `getDeviceID` logging on success, unprotected fallback on failure) and a note that initialization must succeed before any protected request. Documented the same on the `initialize` method.
+
+
 ## [3.5.4] - 2026-05-28
 
 ### Added

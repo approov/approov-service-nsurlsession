@@ -63,6 +63,15 @@ substitutionQueryParams:(NSArray<NSString *> * _Nullable)substitutionQueryParams
                errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 - (BOOL)shouldProcessPinningRequest:(NSURLRequest * _Nonnull)request;
 - (NSInteger)handleInterceptorFetchTokenResult:(id _Nonnull)result url:(NSString * _Nonnull)url errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+// Substitution decisions. Return 1 to substitute, 0 to skip. A mutator that wants the request to fail
+// throws, which arrives here as a non-nil errorPointer alongside 0; a 0 with no error means "skip this
+// substitution", which is how the default mutator reports UNKNOWN_KEY.
+- (NSInteger)handleInterceptorHeaderSubstitutionResult:(id _Nonnull)result
+                                                header:(NSString * _Nonnull)header
+                                          errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
+- (NSInteger)handleInterceptorQueryParamSubstitutionResult:(id _Nonnull)result
+                                                  queryKey:(NSString * _Nonnull)queryKey
+                                              errorPointer:(NSError * _Nullable * _Nullable)errorPointer;
 @end
 
 NS_ASSUME_NONNULL_BEGIN
@@ -70,6 +79,21 @@ NS_ASSUME_NONNULL_BEGIN
 // ApproovService provides a mediation layer to the underlying Approov SDK
 @interface ApproovService: NSObject
 - (instancetype)init NS_UNAVAILABLE;
+
+/**
+ * Initializes the ApproovService with an account configuration.
+ *
+ * Initialization must succeed before any protected request: call this once at app startup,
+ * before creating any ApproovNSURLSession or making any API call. Pass an empty string ("") for
+ * bypass mode (the native SDK is not initialized and requests are unprotected). On failure the
+ * @c error out-parameter is set and the service stays uninitialized — log it and decide whether to
+ * block startup or continue unprotected; do not assume protection is active. On success, log
+ * @c getDeviceID together with an app-generated session/correlation id so an install can be
+ * correlated across your app logs, backend, and the Approov metrics.
+ *
+ * @param configString the account configuration string, or "" for bypass mode
+ * @param error out-parameter set if initialization fails
+ */
 + (void)initialize:(NSString *)configString error:(NSError * _Nullable * _Nullable)error;
 + (void)initialize:(NSString *)configString comment:(nullable NSString *)comment error:(NSError * _Nullable * _Nullable)error;
 + (BOOL)isInitialized;
