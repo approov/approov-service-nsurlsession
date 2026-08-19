@@ -275,6 +275,58 @@
                   @"the version segment must not be empty: %@", userProperty);
 }
 
+- (void)testSuccessWithEmptyTokenOmitsTheTokenHeader {
+    // TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback": with no token available and the
+    // status fallback disabled, the header must be OMITTED - not sent empty, and not sent as the prefix
+    // alone. A domain registered for secure-string substitution or pinning only reaches exactly this
+    // shape: the fetch succeeds but no token is minted for it.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setApproovTokenPrefix:@"Bearer "];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"emptyToken\":true"
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    NSString *tokenHeader = [updatedRequest valueForHTTPHeaderField:@"Approov-Token"];
+    XCTAssertNil(tokenHeader,
+                 @"expected the token header to be omitted, got %@", tokenHeader ? [NSString stringWithFormat:@"\"%@\"", tokenHeader] : @"nil");
+}
+
+- (void)testEmptyTokenWithStatusFallbackEnabledSendsTheStatus {
+    // The counterpart: setUseApproovStatusIfNoToken is the supported way to give the backend evidence
+    // that Approov ran, so with it enabled the header carries the status rather than being omitted.
+    XCTAssertTrue([self reinitializeServiceWithTargetHostAndScenarioBody:@""]);
+    [ApproovService setUseApproovStatusIfNoToken:YES];
+    [MiniSDKAttesterProxyController setNextAttestationDirectiveJSON:
+        @"{"
+          @"\"operation\":\"fetchApproovToken\","
+          @"\"response\":{"
+            @"\"status\":\"SUCCESS\","
+            @"\"emptyToken\":true"
+          @"}"
+        @"}"];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:[self targetURLString]]];
+    NSError *error = nil;
+    NSURLRequest *updatedRequest = [ApproovService updateRequestWithApproov:request
+                                                              sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                                                                      error:&error];
+
+    XCTAssertNil(error);
+    XCTAssertEqualObjects([updatedRequest valueForHTTPHeaderField:@"Approov-Token"], @"SUCCESS");
+}
+
 - (void)testEmptyTraceIDDoesNotProduceAnEmptyHeader {
     // TESTING_REQUIREMENTS section 2 "Missing Artifacts Fallback": an empty artifact must be omitted,
     // never sent as an empty-valued header. The SDK returns an empty string when no trace ID is

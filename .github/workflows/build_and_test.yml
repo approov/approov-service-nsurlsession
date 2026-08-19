@@ -49,7 +49,7 @@ jobs:
         with:
           repository: approov/core-service-layers-testing
           token: ${{ secrets.CORE_SERVICE_LAYERS_TESTING_PAT }}
-          ref: 1dbc1bba2135f20cd7a9868ac2eeea881906310c
+          ref: a5adaaccd18b53d4511cd65987b5ac25517b8c9c
           path: core-service-layers-testing
 
       - name: Configure mini-SDK path
