@@ -242,7 +242,11 @@ public extension ApproovServiceMutator {
         case .noNetwork,
              .poorNetwork,
              .mitmDetected:
-            return true
+            // Fail closed. Returning true here would substitute using a result that carries no secure
+            // string, and for .mitmDetected it would proceed after the SDK reported interception.
+            // approov-service-urlsession and approov-service-okhttp both throw for these.
+            throw ApproovServiceError.networkingError(message: "Header substitution for \(header): " +
+                                              Approov.string(from: status))
         case .unknownKey:
             return false
         default:
@@ -266,7 +270,9 @@ public extension ApproovServiceMutator {
         case .noNetwork,
              .poorNetwork,
              .mitmDetected:
-            return true
+            // Fail closed, as for header substitution above.
+            throw ApproovServiceError.networkingError(message: "Query parameter substitution for \(queryKey): " +
+                                              Approov.string(from: status))
         case .unknownKey:
             return false
         default:
