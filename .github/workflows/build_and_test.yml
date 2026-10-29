@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag (must equal the CHANGELOG top entry)"
+        required: true
+        type: string
 
 jobs:
   build-and-test:
@@ -265,7 +270,7 @@ jobs:
           fi
 
           # A bump is required only when something that SHIPS changed. A docs- or CI-only
-          # change may reuse the current version, and the release job then skips tagging;
+          # change may reuse the current version, and there is then nothing new to tag;
           # nothing under Sources/, Package.swift or the podspec moved, so the compiled
           # version string is still truthful.
           BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
@@ -286,7 +291,7 @@ jobs:
               echo "::error::Bump the version in all of the files above, or drop the shipping changes."
               exit 1
             fi
-            echo "Tag $VERSION already exists and nothing shipping changed; reusing it and skipping the tag."
+            echo "Tag $VERSION already exists and nothing shipping changed; reusing it, nothing new to tag."
           else
             NEWEST=$(git tag --sort=-v:refname | head -1 || true)
             echo "Newest existing tag: ${NEWEST:-none}"
@@ -301,12 +306,14 @@ jobs:
           echo "OK: $VERSION is consistent across CHANGELOG, manifests, telemetry and README."
 
   # ---------------------------------------------------------------------------
-  # Tag on merge to main. The version has already been proved consistent by
-  # verify-version, so this only has to decide whether the tag exists yet.
+  # Tag a release. Manual only: a maintainer runs this workflow on main with the
+  # version to release. Merging never tags. A dispatch re-runs build-and-test and
+  # verify-version first, so the tag only lands on a commit that builds, passes
+  # and carries a consistent version.
   # ---------------------------------------------------------------------------
   tag-release:
     needs: [build-and-test, verify-version]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -316,14 +323,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Tag the merge commit
+      - name: Tag the release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Tag from main only (this run is on $GITHUB_REF)"
+            exit 1
+          fi
+
+          VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          if [ "$INPUT_VERSION" != "$VERSION" ]; then
+            echo "::error::Requested version '$INPUT_VERSION' does not match the CHANGELOG top entry '$VERSION'"
+            exit 1
+          fi
 
           if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-            echo "Tag $VERSION already exists; nothing to do (non-shipping merge)."
-            exit 0
+            echo "::error::Tag $VERSION already exists"
+            exit 1
           fi
 
           # No stamping step, so there is no commit to make and nothing that can leave the
