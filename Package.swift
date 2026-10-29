@@ -3,7 +3,7 @@ import Foundation
 import PackageDescription
 
 // The release tag for this version of ApproovNSURLSession.
-let releaseTAG = "3.5.4"
+let releaseTAG = "3.5.5"
 
 // Production Approov SDK package version used by the public library products.
 let sdkVersion: Version = "3.5.3"
@@ -55,7 +55,8 @@ var packageTargets: [Target] = [
             .product(name: "RawStructuredFieldValues", package: "swift-http-structured-headers")
         ],
         path: "Sources/ApproovNSURLSession",
-        exclude: ["util/sig/LICENSE"]
+        exclude: ["util/sig/LICENSE"],
+        swiftSettings: useMiniSDKForTests ? [.define("APPROOV_TESTING")] : nil
     )
 ]
 if useMiniSDKForTests {
@@ -70,6 +71,22 @@ if useMiniSDKForTests {
             ],
             path: "Tests/ApproovNSURLSessionMiniSDKObjCTests",
             cSettings: [.define("APPROOV_TESTING")]
+        )
+    )
+    packageTargets.append(
+        .testTarget(
+            name: "ApproovNSURLSessionMiniSDKSwiftTests",
+            dependencies: [
+                "ApproovNSURLSession",
+                "ApproovNSURLSessionObjC",
+                // The mini SDK and its directive controller, so a Swift test can install a custom
+                // service mutator AND steer the fetch results it has to react to. Without these the
+                // Swift target could only test the mutator in isolation, never the interceptor path
+                // that is supposed to consult it.
+                .product(name: "Approov", package: testingMiniSDKPackageName),
+                .product(name: "MiniSDKTestSupport", package: testingMiniSDKPackageName)
+            ],
+            path: "Tests/ApproovNSURLSessionMiniSDKSwiftTests"
         )
     )
 }
